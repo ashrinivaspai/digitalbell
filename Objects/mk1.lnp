@@ -1,0 +1,3 @@
+".\Objects\dig_bell_settime.obj" 
+TO ".\Objects\mk1" 
+PRINT(".\Listings\mk1.m51") RAMSIZE(256) 

@@ -716,6 +716,9 @@ I2C_Stop:
 ;*	INPUT 	: ADD_LOW		*
 ;*		: DAVAVA			*
 ;*****************************************************
+MOV ADD_LOWL,#02H
+MOV DAVAVA,#10H
+LCALL	WRITE_
 WRITE_BYTE:            CLR     SDA                   ;start bit
                        CLR     SCL
                        MOV     A,#CONT_BYTE_W        ;send control byte

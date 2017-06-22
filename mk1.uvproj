@@ -364,9 +364,9 @@
           <GroupName>Source Group 1</GroupName>
           <Files>
             <File>
-              <FileName>dig_bell_settime.asm</FileName>
+              <FileName>SET_TIME.ASM</FileName>
               <FileType>2</FileType>
-              <FilePath>C:\Users\Srinivas\Documents\dig_bell_settime.asm</FilePath>
+              <FilePath>.\SET_TIME.ASM</FilePath>
             </File>
           </Files>
         </Group>

@@ -175,8 +175,8 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>C:\Users\Srinivas\Documents\dig_bell_settime.asm</PathWithFileName>
-      <FilenameWithoutPath>dig_bell_settime.asm</FilenameWithoutPath>
+      <PathWithFileName>.\SET_TIME.ASM</PathWithFileName>
+      <FilenameWithoutPath>SET_TIME.ASM</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

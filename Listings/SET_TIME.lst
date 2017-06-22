@@ -1,0 +1,862 @@
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE     1
+
+
+MACRO ASSEMBLER A51 V8.02b
+OBJECT MODULE PLACED IN .\Objects\SET_TIME.obj
+ASSEMBLER INVOKED BY: C:\Keil_v5\C51\BIN\A51.EXE SET_TIME.ASM SET(SMALL) DEBUG PRINT(.\Listings\SET_TIME.lst) OBJECT(.\O
+                      bjects\SET_TIME.obj) EP
+
+LOC  OBJ            LINE     SOURCE
+
+0000                   1     org 00h
+0000 020100            2     LJMP BEGIN
+                       3     ;===================================================================================
+                       4     
+  00A0                 5             SCL                     EQU     0A0h    ;IN THIS EXAMPLE I USED PORT 2.0
+  00A1                 6             SDA                     EQU     0A1h    ;AND PORT 2.1 FOR THE I2C LINES
+                       7                                                         ;YOU CAN CHANGE THEM TO WHATEVER ACCEPT
+                             ABLE
+  00B3                 8             TIME_KEY        EQU             P3.3    ;SET_TIME KEY
+  00B4                 9             BELL_KEY        EQU             P3.4    ;SET_BELL KEY
+  00B5                10             EMRG_KEY        EQU     P3.5    ;EMERGENCY KEY
+                      11     
+                      12     ;===================================================================================
+                      13     ;=====THE READ AND WRITE COMMANDS (0D0H AND 0D1H)
+                      14     
+  00D0                15             CONT_BYTE_W             EQU     11010000B
+  00D1                16             CONT_BYTE_R             EQU     11010001B
+                      17     
+                      18     ;===================================================================================
+                      19     
+0060                  20             ORG    0060H
+                      21     
+                      22     ;===================================================================================
+                      23     ;=====ADD_LOW IS THE DPL, THIS IS THE ADDRESS INISDE THE DS1307
+                      24     ;=====DAVAVA IS THE VARIABLE TO STORE DATA WHEN IT GETS BACK FROM THE DS1307
+                      25        
+  0061                26             DAVAVA          EQU 61H
+  0060                27             ADD_LOWL        EQU 60H
+  0062                28             MEMORY_ADDRESS1 EQU 62H
+  0063                29             MEMORY_ADDRESS2 EQU 63H
+  0064                30             EEPROM_DATA     EQU 64H
+                      31     ;===================================================================================
+                      32     ;=====VARIABLES TO STORE THE TIME IN, COULD BE USED ALSO TO STORE DATA TO WRITE ON DS1307
+                      33     
+  0050                34             SEC                         EQU 50H
+  0051                35             MIN                 EQU 51H
+  0052                36             HOURS                   EQU     52H
+  0067                37             DAY                     EQU     67H
+  0053                38             COUNT                   EQU     53H
+                      39             ;COUNT1                 EQU 54H
+                      40             ;COUNT2         EQU 55H
+                      41             ;COUNT3         EQU 56H
+                      42             ;COUNT4         EQU 57H
+  0059                43             HOURS1                  EQU 59H
+  0058                44             MIN1            EQU 58H
+  0064                45             FLAG            EQU 64H
+  006B                46             COUNT7          EQU 6BH
+  0062                47             HOURS2                  EQU     62H
+  0063                48             MINS2           EQU 63H
+  0069                49             DAYS            EQU 69H
+  006A                50             COUNT6          EQU 6AH
+  0068                51             COUNT8          EQU  68H
+  0066                52             COUNT9          EQU  66H
+  007C                53             PA1             EQU 7CH
+  0000                54             MEM_VAL                 EQU     00H
+0100                  55             ORG    0100H
+                      56     
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE     2
+
+                      57     ;============================================================================
+                      58     
+0100                  59     BEGIN:
+0100 120121           60             LCALL INTI
+0103 C2A0             61             CLR SCL
+0105 C2A1             62             CLR     SDA
+0107 C2A2             63         CLR P2.2
+0109 C2B7             64             CLR P3.7
+010B 00               65         NOP
+010C D2A0             66         SETB    SCL
+010E D2A1             67         SETB        SDA
+0110 00               68         NOP
+0111 C200             69             CLR     MEM_VAL
+0113 120147           70             LCALL FIRST
+0116 900172           71             MOV DPTR, #WELCOME
+0119 120140           72         LCALL DISP_MSG
+011C                  73         LOOP:
+011C 120242           74             LCALL CHECK_KEY
+011F 80FB             75             SJMP LOOP
+                      76     
+                      77     ;******************************************
+                      78     ;This module initializes the LD
+                      79     ;DEPENDANCIES:CMD
+                      80     ;******************************************
+0121                  81     INTI:   
+0121 743C             82             MOV A,#3CH      ;refer manual for the bit meaning
+0123 120153           83             LCALL CMD
+0126 743C             84             MOV A,#3CH
+0128 120153           85             LCALL CMD
+012B 743C             86             MOV A,#3CH
+012D 120153           87             LCALL CMD
+0130 740C             88             MOV A,#0CH
+0132 120153           89             LCALL  CMD
+0135 7406             90             MOV A,#06H
+0137 120153           91             LCALL  CMD
+013A 7401             92             MOV A,#01
+013C 120153           93             LCALL CMD
+013F 22               94             RET
+                      95     
+                      96     ;*****************************************
+                      97     ;This module is used to display the message
+                      98     ;pointed by dptr on the dptr on the screen
+                      99     ;DEPENDANCIES:DISPCH2, DELAY_1SEC
+                     100     ;*****************************************
+0140                 101     DISP_MSG:
+0140 120207          102         LCALL DISPCH2
+0143 120235          103         LCALL DELAY_1SEC
+0146 22              104             RET
+                     105     
+                     106     ;*****************************************
+                     107     ;This module moves the cursor back to first
+                     108     ;line first position
+                     109     ;******************************************
+0147                 110     FIRST:
+0147 7480            111         MOV A,#80H
+0149 120153          112         LCALL CMD
+014C 22              113         RET
+014D                 114     SECOND:
+014D 74C0            115             MOV A,#0C0H
+014F 120153          116             LCALL CMD
+0152 22              117             RET
+                     118     
+                     119     ;******************************************
+                     120     ;This module gives cmd to LCD
+                     121     ;cmd should be input through Acc
+                     122     ;DEPENDANCIES: READY
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE     3
+
+                     123     ;******************************************
+0153                 124     CMD:    
+0153 120161          125             LCALL READY
+0156 F580            126             MOV  80H,A
+0158 C2A5            127             CLR 0A5H        ; low on RS
+015A C2A6            128             CLR 0A6H
+015C D2A7            129             SETB 0A7H        ; high to low on En line
+015E C2A7            130             CLR 0A7H
+0160 22              131             RET
+                     132     
+                     133     ;******************************************
+                     134     ;This module checks the LCD status
+                     135     ;whether busy or not and returns from the 
+                     136     ;module only if the busy flag is 0
+                     137     ;******************************************
+0161                 138     READY:  
+0161 C2A7            139         CLR 0A7H            ;read busy flag
+0163 7580FF          140             MOV     80H,#0FFH
+0166 C2A5            141             CLR     0A5H
+0168 D2A6            142             SETB    0A6H
+016A                 143             WAIT:   
+016A C2A7            144                     CLR     0A7H
+016C D2A7            145                     SETB    0A7H
+016E 2087F9          146                     JB      87H,WAIT
+0171 22              147             RET
+                     148     
+0172 20202020        149     WELCOME:   db '    WELCOME!   ',0fh
+0176 57454C43                
+017A 4F4D4521                
+017E 2020200F                
+0182 20202020        150     MESSAGE1: DB '     HH:MM      ', 0FH
+0186 2048483A                
+018A 4D4D2020                
+018E 20202020                
+0192 0F                      
+0193 20202020        151     MESSAGE2: DB '     __:__      ', 0FH
+0197 205F5F3A                
+019B 5F5F2020                
+019F 20202020                
+01A3 0F                      
+01A4 4441595B        152     MESSAGE3: DB 'DAY[1-7]', 0FH
+01A8 312D375D                
+01AC 0F                      
+01AD 494E5641        153     ERROR_MSG: DB 'INVALID NUMBER', 0FH
+01B1 4C494420                
+01B5 4E554D42                
+01B9 45520F                  
+01BC 3030304D        154     WEEKDAY: DB '000','MON','TUE','WED', 'THU', 'FRI', 'SAT', 'SUN' 
+01C0 4F4E5455                
+01C4 45574544                
+01C8 54485546                
+01CC 52495341                
+01D0 5453554E                
+01D4 31323334        155     PASSWORD: DB '1234',0FH
+01D8 0F                      
+01D9 31323334        156     KEYCODE:DB '1','2','3','4','5','6','7','8','9','*','0','#'
+01DD 35363738                
+01E1 392A3023                
+01E5 20454E54        157     MESSAGE4: DB ' ENTER PASSWORD ',0FH
+01E9 45522050                
+01ED 41535357                
+01F1 4F524420                
+01F5 0F                      
+01F6 20494E43        158     AUTH_MSG: DB ' INCORRECT  PIN ', 0FH
+01FA 4F525245                
+01FE 43542020                
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE     4
+
+0202 50494E20                
+0206 0F                      
+                     159     
+                     160     ;******************************************
+                     161     ;This module takes the starting add. of the 
+                     162     ;string to be displayed in the DPTR and loops
+                     163     ;till it find the string terminator #0FH
+                     164     ;DEPENDANCIES:DISP
+                     165     ;******************************************
+0207                 166     DISPCH2:
+0207 00              167             nop
+0208                 168             UP11:   
+0208 E4              169                     CLR A
+0209 93              170                     MOVC A,@A+DPTR  ;use lookup table to get ascii character
+020A B40F01          171                     CJNE A,#0FH,SKIP
+020D 22              172                     RET             
+020E                 173             SKIP:   
+020E A3              174                     INC DPTR
+020F 120227          175                     LCALL  DISP
+0212 80F4            176                     SJMP UP11
+                     177     
+                     178     ;********************************************
+                     179     ;This module is used to display the 3 lettered
+                     180     ;day in the LCD
+                     181     ;give the number of corresponding day in Acc.
+                     182     ;DEPENDANCIES:DISP
+                     183     ;*********************************************
+0214                 184     DISP_DAY:
+0214                 185             UP12:
+0214 F5F0            186                     MOV B,A
+0216 7904            187                     MOV R1, #04H
+0218 9001BC          188                     MOV DPTR, #WEEKDAY
+021B                 189                     UP13:
+021B E5F0            190                             MOV A,B
+021D 93              191                             MOVC A,@A+DPTR  ;use lookup table to get ascii character
+021E D901            192                             DJNZ R1,SKIP1
+0220 22              193                             RET             
+0221                 194             SKIP1:  
+0221 A3              195                     INC DPTR
+0222 120227          196                     LCALL  DISP
+0225 80F4            197                     SJMP UP13
+                     198     
+                     199     ;********************************************
+                     200     ;This module takes char. to be displayed in 
+                     201     ; the Acc. 
+                     202     ;*********************************************
+0227                 203     DISP:
+0227 120161          204             LCALL   READY                               ;DISPLAY SINGLE CHAR
+022A F580            205             MOV  80H, A
+022C D2A5            206             SETB    0A5H     ; high RS
+022E C2A6            207             CLR     0A6H    ;; low RW
+0230 D2A7            208             SETB    0A7H    ; high to low En 
+0232 C2A7            209             CLR     0A7H
+0234 22              210             RET
+                     211     
+                     212     ;********************************************
+                     213     ; This module generates delay of 1sec
+                     214     ;********************************************
+0235                 215     DELAY_1SEC:
+0235 7F0A            216             MOV R7,#10      
+0237                 217             HERE4:
+0237 7EFF            218                     MOV R6,#0ffh                      ;delay routine for firing
+0239                 219                     HERE31: 
+0239 7DFF            220                                     MOV     R5,#0ffH
+023B                 221                                     REPEAT1:
+023B DDFE            222                                             DJNZ    R5,REPEAT1
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE     5
+
+023D DEFA            223                                         DJNZ    R6,HERE31
+023F DFF6            224                                         DJNZ        R7,HERE4        
+0241 22              225                                             RET
+                     226     
+0242                 227     CHECK_KEY:
+0242 30B384          228             JNB TIME_KEY, SET_TIME
+*** _______________________________________________^
+*** ERROR #A51 IN 228 (SET_TIME.ASM, LINE 228): TARGET OUT OF RANGE
+                     229             ;JNB BELL_KEY, SET_BELL
+                     230             ;JNB EMRG_KEY, EMERGENCY
+0245 22              231             RET
+                     232     
+0246                 233     KEYPD:   
+0246 7D00            234             MOV R5,#00           
+0248 7590FE          235             MOV 90H,#0FEH   ;scan 1st row
+024B E590            236             MOV A,90H
+024D 64FE            237             XRL A,#0FEH
+024F 702A            238             JNZ ROW
+                     239                     
+0251 ED              240             MOV A,R5
+0252 2403            241             ADD A,#03H
+0254 FD              242             MOV R5,A
+                     243                   
+0255 7590FD          244             MOV 90H,#0FDH   ;scan 2nd row
+0258 E590            245             MOV A,90H
+025A 64FD            246             XRL A,#0FDH
+025C 701D            247             JNZ ROW
+025E ED              248             MOV A,R5
+025F 2403            249             ADD A,#03H
+0261 FD              250             MOV R5,A
+                     251                  
+0262 7590FB          252             MOV 90H,#0FBH   ;scan 3rd row
+0265 E590            253             MOV A,90H
+0267 64FB            254             XRL A,#0FBH
+0269 7010            255             JNZ ROW
+026B ED              256             MOV A,R5
+026C 2403            257             ADD A,#03H
+026E FD              258             MOV R5,A
+                     259     
+026F 7590F7          260             MOV 90H,#0F7H   ;scan 4th row
+0272 E590            261             MOV A,90H
+0274 64F7            262             XRL A,#0F7H
+0276 7003            263             JNZ ROW
+0278 020246          264             LJMP KEYPD
+                     265      
+027B                 266             ROW:  
+027B E590            267                     MOV A,90H
+027D 54F0            268             ANL A,#0F0H
+027F C4              269             SWAP A
+0280                 270             REDO:  
+0280 13              271                     RRC A
+0281 5003            272                     JNC KEY
+0283 0D              273                     INC R5
+0284 80FA            274                     SJMP REDO
+0286                 275             KEY:
+0286 7590F0          276                     MOV 90H,#0F0H
+0289 00              277                     NOP
+028A 00              278                     NOP
+028B E590            279                     MOV     A,90H
+                     280     
+028D 64F0            281                     XRL     A,#0F0H
+028F 70F5            282                     JNZ     KEY
+0291 ED              283                     MOV     A,R5
+0292 9001D9          284                     MOV DPTR,#KEYCODE
+0295 93              285                     MOVC    A,@A+DPTR
+0296 120235          286                     LCALL DELAY_1SEC
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE     6
+
+                     287     
+0299 22              288             RET
+                     289     
+029A                 290     VER_PASSWD:
+029A 120147          291             LCALL FIRST
+029D 9001E5          292             MOV DPTR, #MESSAGE4
+02A0 120207          293             LCALL DISPCH2
+02A3 12014D          294             LCALL SECOND
+02A6 740F            295             MOV A, #0FH                     ;BLINKING CURSOR
+02A8 120153          296             LCALL CMD
+02AB 1204E0          297             LCALL READ_PASSWORD             ;NOW 4 CHARACTER PIN WILL BE LOCATED FROM 54H
+02AE 7854            298             MOV R0,#54H
+02B0 86F0            299             MOV B, @R0
+02B2 756400          300             MOV FLAG,#00H
+02B5 7904            301             MOV R1,#04H
+02B7                 302             LOOP4:
+02B7 120246          303             LCALL KEYPD
+02BA B5F008          304             CJNE A,B, SET_FLAG
+02BD E52A            305             MOV A, '*'
+02BF 120227          306             LCALL DISP
+02C2 D9F3            307             DJNZ R1, LOOP4
+                     308     
+02C4 22              309             RET
+                     310     
+02C5                 311     SET_FLAG:
+02C5 7564FF          312             MOV FLAG, #0FFH
+02C8 22              313             RET
+                     314     
+                     315     
+                     316     
+                     317     
+02C9                 318     SET_TIME:
+02C9 12029A          319             LCALL VER_PASSWD
+02CC 75F0FF          320             MOV B, #0FFH
+02CF E564            321             MOV A, FLAG
+02D1 B5F002          322             CJNE A, B, AUTH_FAIL
+02D4 8008            323             SJMP N101
+02D6                 324             AUTH_FAIL:
+02D6 9001F6          325                     MOV DPTR, #AUTH_MSG
+02D9 120140          326                     LCALL DISP_MSG
+02DC 80EB            327                     SJMP SET_TIME
+02DE                 328             N101:
+02DE 120147          329             LCALL FIRST
+02E1 900182          330             MOV DPTR, #MESSAGE1
+02E4 120140          331             LCALL DISP_MSG
+02E7 12014D          332             LCALL SECOND                    ;MOVING CURSOR TO SECOND LINE
+02EA 900193          333             MOV DPTR, #MESSAGE2
+02ED 120140          334             LCALL DISP_MSG
+02F0 12014D          335             LCALL SECOND
+02F3 740F            336             MOV A, #0FH                     ;TURNING ON THE CURSOR
+02F5 120153          337             LCALL CMD
+02F8 7905            338             MOV R1, #5H                     ;SHIFTING CURSOR 5 TIMES
+02FA 7414            339             LOOP1: MOV A, #14H      
+02FC 120153          340             LCALL CMD
+02FF D9F9            341             DJNZ R1, LOOP1
+                     342             ;STARTING TO READ THE VALUE OF HOUR
+0301 120246          343             LCALL KEYPD
+0304 120227          344             LCALL DISP
+0307 B43002          345             CJNE A, #30H, N1
+030A 8008            346             SJMP N
+030C B43102          347             N1:CJNE A, #31H, N2
+030F 8003            348             SJMP N
+0311 B43224          349             N2:CJNE A, #32H,ERROR
+0314                 350             N:
+0314 C3              351             CLR C
+0315 9430            352             SUBB A, #30H
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE     7
+
+0317 C4              353             SWAP A                                  ;ADJUSTMENTS
+0318 F9              354             MOV R1, A                               ;SAVING THE VALUE OF A
+0319 120246          355             LCALL KEYPD
+031C 120227          356             LCALL DISP
+031F B42302          357             CJNE A, #23H, N3                ;COMPARING THE VALUE OF KEY WITH #
+0322 8014            358             JMP ERROR
+0324                 359             N3:
+0324 B42A02          360             CJNE A, #2AH, N4                ;COMPARING THE VALUE OF KEY WITH *
+0327 800F            361             JMP ERROR
+0329                 362             N4:
+0329 C3              363             CLR C
+032A 9430            364             SUBB A, #30H                    ;ADJUSTMENTS
+032C 29              365             ADD A,R1
+032D 9425            366             SUBB A,#25H                             ;CHECKING IF THE HOUR VALUE IS GRATER THAN 24
+032F 5007            367             JNC ERROR
+0331 7414            368             MOV A, #14H                             ;SHIFT CURSOR RIGHT ONCE TO AVOID THE COLON
+0333 120153          369             LCALL CMD
+                     370     
+0336 8016            371             SJMP N100
+                     372             
+                     373             ;START OF ERROR HANDLING
+                     374     
+0338                 375             ERROR:
+0338 120147          376                     LCALL FIRST
+033B 740C            377                     MOV A, #0CH             ;TURNING OFF THE CURSOR
+033D 120153          378                     LCALL CMD
+0340 9001AD          379                     MOV DPTR, #ERROR_MSG
+0343 120140          380                     LCALL DISP_MSG
+0346 120235          381                     LCALL DELAY_1SEC
+0349 120235          382                     LCALL DELAY_1SEC
+034C 41C9            383             JMP SET_TIME
+                     384     
+                     385             ;STARTING TO READ THE MINUTES 
+034E                 386             N100:
+034E 120246          387             LCALL KEYPD
+0351 120227          388             LCALL DISP
+0354 B42302          389             CJNE A, #23H, N5                ;COMPARING THE VALUE OF KEY WITH #
+0357 80DF            390             SJMP ERROR
+0359                 391             N5:
+0359 B42A02          392             CJNE A, #2AH, N6                ;COMPARING THE VALUE OF KEY WITH *
+035C 80DA            393             SJMP ERROR
+035E                 394             N6:
+035E 9436            395             SUBB A, #36H
+0360 50D6            396             JNC ERROR
+0362 C3              397             CLR C
+0363 120246          398             LCALL KEYPD
+0366 120227          399             LCALL DISP
+0369 B42302          400             CJNE A, #23H, N7                ;COMPARING THE VALUE OF KEY WITH #
+036C 80CA            401             SJMP ERROR
+036E                 402             N7:
+036E B42A02          403             CJNE A, #2AH, N8                ;COMPARING THE VALUE OF KEY WITH *
+0371 80C5            404             SJMP ERROR
+0373                 405             N8:
+0373 740C            406             MOV A, #0CH                     ;TURNING OFF THE CURSOR
+0375 120153          407             LCALL CMD
+0378                 408             LOOP2:
+0378 120246          409             LCALL KEYPD
+037B B42A02          410             CJNE A, #2AH, N9
+037E 41C9            411             JMP SET_TIME
+0380                 412             N9:
+0380 B423F5          413             CJNE A, #23H, LOOP2
+                     414     
+                     415             ;STARTING TO READ THE WEEK DAY
+0383                 416             SET_DAY:
+0383 7401            417                     MOV A, #01H
+0385 120153          418                     LCALL CMD
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE     8
+
+0388 9001A4          419                     MOV DPTR, #MESSAGE3
+038B 120140          420                     LCALL DISP_MSG
+038E 12014D          421                     LCALL SECOND
+0391 120153          422                     LCALL CMD
+0394 740F            423                     MOV A, #0FH                     ;TURNING ON THE CURSOR
+0396 120153          424                     LCALL CMD
+0399 120246          425                     LCALL KEYPD
+039C 120227          426                     LCALL DISP
+039F B42302          427                     CJNE A, #23H, N10               ;COMPARING THE VALUE OF KEY WITH #
+03A2 8031            428                     SJMP ERROR_DAY
+03A4                 429                     N10:
+03A4 B42A02          430                     CJNE A, #2AH, N11               ;COMPARING THE VALUE OF KEY WITH *
+03A7 802C            431                     SJMP ERROR_DAY
+03A9                 432                     N11:
+03A9 B43002          433                     CJNE A, #30H, N12               ;COMPARING THE VALUE OF KEY WITH 0
+03AC 8027            434                     SJMP ERROR_DAY
+03AE                 435                     N12:
+03AE F9              436                     MOV R1,A
+03AF 9438            437                     SUBB A, #38H
+03B1 5022            438                     JNC ERROR_DAY
+03B3 C3              439                     CLR C
+03B4 740C            440                     MOV A, #0CH                     ;TURNING OFF THE CURSOR
+03B6 120153          441                     LCALL CMD
+03B9 7414            442                     MOV A, #14H                             ;SHIFTING RIGHT CURSOR TO GIVE SPACE
+03BB 120153          443                     LCALL CMD
+03BE E9              444                     MOV A,R1
+03BF 9430            445                     SUBB A, #30H
+03C1 75F003          446                     MOV B, #3H
+03C4 A4              447                     MUL AB
+03C5 120214          448                     LCALL DISP_DAY                  ;DISPLAYING THE DAY AS SOON AS WE PRESS THE KEY
+03C8                 449                     LOOP3:
+03C8 120246          450                     LCALL KEYPD                             ;INPUTTING THE ENTER KEY OR CLEAR KEY
+03CB B42A02          451                     CJNE A, #2AH, N13
+03CE 80B3            452                     JMP SET_DAY
+03D0                 453                     N13:
+03D0 B423F5          454                     CJNE A, #23H, LOOP3
+03D3 8016            455                     SJMP END_SETTIME
+                     456             ;START OF ERROR HANDLING
+                     457     
+03D5                 458             ERROR_DAY:
+03D5 120147          459                     LCALL FIRST
+03D8 740C            460                     MOV A, #0CH                     ;TURNING OFF THE CURSOR
+03DA 120153          461                     LCALL CMD
+03DD 9001AD          462                     MOV DPTR, #ERROR_MSG
+03E0 120140          463                     LCALL DISP_MSG
+03E3 120235          464                     LCALL DELAY_1SEC
+03E6 120235          465                     LCALL DELAY_1SEC
+03E9 8098            466                     JMP SET_DAY
+                     467     
+03EB                 468             END_SETTIME:
+                     469     
+03EB 22              470             RET
+                     471     
+                     472     ;***********************************************
+                     473     ;This module is used to write data to EEPROM
+                     474     ;User has to pass the starting address of the
+                     475     ;data through the R0 register, location on the
+                     476     ;EEPROM through the DPTR and the count of the 
+                     477     ;data through COUNT9. Rest everything is handled
+                     478     ;by this module
+                     479     ;DEPENDANCIES:EEPROM_START, EEPROM_DELAY,SEND_DATA
+                     480     ;                               EEPROM_STOP
+                     481     ;*************************************************
+03EC                 482     WRITE_DATA:     
+03EC 9150            483             CALL EEPROM_START
+03EE 74A0            484             MOV A,#0A0H          
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE     9
+
+03F0 918E            485             CALL SEND_DATA
+03F2 E582            486             MOV A,DPL                       ;LOCATION ADDRESS
+03F4 918E            487             CALL SEND_DATA
+03F6 E583            488             MOV A,DPH                       ;LOCATION ADDRESS
+03F8 918E            489             CALL SEND_DATA
+03FA 8664            490             MOV EEPROM_DATA,@R0
+03FC E564            491             MOV A,EEPROM_DATA       ;DATA TO BE SEND
+03FE 918E            492             CALL SEND_DATA
+0400 916F            493             CALL EEPROM_STOP
+0402 1204D3          494             LCALL EEPROM_DELAY
+0405 1204D3          495             LCALL EEPROM_DELAY
+0408 9150            496             CALL EEPROM_START
+040A 74A0            497             MOV A,#0A0H          
+040C 918E            498             CALL SEND_DATA
+040E E582            499             MOV A,DPL                        ;LOCATION ADDRESS
+0410 918E            500             CALL SEND_DATA
+0412 E583            501             MOV A,DPH                        ;LOCATION ADDRESS
+0414 918E            502             CALL SEND_DATA
+0416 8664            503             MOV EEPROM_DATA,@R0
+0418 E564            504             MOV A,EEPROM_DATA        ;DATA TO BE SEND
+041A 918E            505             CALL SEND_DATA
+041C 916F            506             CALL EEPROM_STOP
+041E 1204D3          507             LCALL   EEPROM_DELAY
+0421 1204D3          508             LCALL   EEPROM_DELAY
+0424 A3              509             INC DPTR
+0425 08              510             INC R0
+0426 D566C3          511             DJNZ COUNT9,WRITE_DATA 
+0429 22              512             RET   
+                     513     
+                     514     ;*************************************************
+                     515     ;This module is used to read the data from EEPROM
+                     516     ;Location on the EEPROM is passed through the DPTR
+                     517     ;and data is returned to the RAM in the location 
+                     518     ;determined by the R1 and number of bytes read is
+                     519     ;determined by the COUNT9
+                     520     ;DEPENDANCIES:EEPROM_START, EEPROM_DELAY,SEND_DATA
+                     521     ;                               EEPROM_STOP
+                     522     ;*************************************************
+042A                 523     READ_DATA:      
+042A 9150            524             CALL EEPROM_START
+042C 74A0            525             MOV A,#0A0H
+042E 918E            526             CALL SEND_DATA
+0430 E582            527             MOV A,DPL                        ;LOCATION ADDRESS
+0432 918E            528             CALL SEND_DATA
+0434 E583            529             MOV A,DPH                        ;LOCATION ADDRESS
+0436 918E            530             CALL SEND_DATA
+0438 9150            531             CALL EEPROM_START
+043A 74A1            532             MOV A,#0A1H
+043C 918E            533             CALL SEND_DATA
+043E 91AD            534             CALL GET_DATA
+0440 916F            535             CALL EEPROM_STOP
+0442 1204D3          536             LCALL   EEPROM_DELAY
+0445 1204D3          537             LCALL   EEPROM_DELAY
+0448 A3              538             INC DPTR
+0449 A73C            539             MOV @R1,3CH                              ; STORE
+044B 09              540             INC R1                          
+044C D566DB          541             DJNZ COUNT9,READ_DATA
+044F 22              542             RET
+                     543             ;=========================================================
+                     544     
+0450                 545     EEPROM_START:  
+0450 D2A1            546             SETB SDA
+0452 00              547             NOP
+0453 00              548             NOP
+0454 00              549             NOP
+0455 00              550             NOP
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE    10
+
+0456 00              551             NOP
+0457 00              552             NOP
+0458 00              553             NOP
+0459 D2A0            554             SETB SCL
+045B 00              555             NOP
+045C 00              556             NOP
+045D 00              557             NOP
+045E 00              558             NOP
+045F 00              559             NOP
+0460 00              560             NOP
+0461 00              561             NOP
+0462 00              562             NOP
+0463 C2A1            563             CLR SDA
+0465 00              564             NOP
+0466 00              565             NOP
+0467 00              566             NOP
+0468 00              567             NOP
+0469 00              568             NOP
+046A 00              569             NOP
+046B 00              570             NOP
+046C C2A0            571             CLR SCL
+046E 22              572             RET
+                     573             ;=========================================================
+046F                 574     EEPROM_STOP:    
+046F C2A1            575             CLR SDA
+0471 00              576             NOP
+0472 00              577             NOP
+0473 00              578             NOP
+0474 00              579             NOP
+0475 00              580             NOP
+0476 00              581             NOP
+0477 00              582             NOP
+0478 D2A0            583             SETB SCL
+047A 00              584             NOP
+047B 00              585             NOP
+047C 00              586             NOP
+047D 00              587             NOP
+047E 00              588             NOP
+047F 00              589             NOP
+0480 00              590             NOP
+0481 00              591             NOP
+0482 D2A1            592             SETB SDA
+0484 00              593             NOP
+0485 00              594             NOP
+0486 00              595             NOP
+0487 00              596             NOP
+0488 00              597             NOP
+0489 00              598             NOP
+048A 00              599             NOP
+048B C2A0            600             CLR SCL
+048D 22              601             RET
+                     602             ;=========================================================
+048E                 603     SEND_DATA:     
+048E 7F00            604             MOV R7,#00H
+0490                 605             SEND:      
+0490 33              606                     RLC A
+0491 92A1            607                     MOV SDA,C
+0493 91C6            608                     CALL CLOCK
+0495 0F              609                     INC R7
+0496 BF08F7          610                     CJNE R7,#08,SEND
+0499 D2A1            611             SETB  SDA
+049B 00              612             NOP
+049C 00              613             NOP     
+049D 00              614             NOP
+049E 00              615             NOP
+049F 00              616             NOP     
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE    11
+
+04A0 00              617             NOP
+04A1 D2A0            618             SETB SCL
+04A3 20A1FD          619             JB SDA,$
+04A6 91D3            620             CALL EEPROM_DELAY
+04A8 C2A0            621             CLR SCL
+04AA 91D3            622             CALL EEPROM_DELAY
+04AC 22              623             RET
+                     624             ;=========================================================
+04AD                 625     GET_DATA:
+04AD D2A1            626             SETB SDA   
+04AF 7F00            627             MOV R7,#00H
+04B1 E4              628             CLR A
+04B2                 629             GET:    
+04B2 D2A0            630                     SETB SCL
+04B4 00              631                     NOP
+04B5 00              632                     NOP     
+04B6 A2A1            633                     MOV C,SDA
+04B8 33              634                     RLC A
+04B9 C2A0            635                     CLR SCL
+04BB 0F              636                     INC R7
+04BC BF08F3          637                     CJNE R7,#08,GET
+04BF D2A1            638             SETB SDA
+04C1 91C6            639             CALL CLOCK
+04C3 F53C            640             MOV 3CH,A
+04C5 22              641             RET
+                     642             ;=========================================================
+04C6                 643     CLOCK:         
+04C6 D2A0            644             SETB SCL
+04C8 00              645             NOP
+04C9 00              646             NOP
+04CA 00              647             NOP
+04CB 00              648             NOP
+04CC 00              649             NOP
+04CD 00              650             NOP
+04CE 00              651             NOP
+04CF 00              652             NOP
+04D0 C2A0            653             CLR SCL
+04D2 22              654             RET
+04D3                 655     EEPROM_DELAY:      
+04D3 75330B          656             MOV 33H,#11      ;DELAY OF 3 MSEC 
+04D6                 657             EEPROM_DELAY_1:
+04D6 7532FF          658                     MOV 32H,#0FFH
+04D9 D532FD          659                     DJNZ 32H,$
+04DC D533F7          660                     DJNZ 33H,EEPROM_DELAY_1
+04DF 22              661                     RET
+                     662     
+04E0                 663     READ_PASSWORD:
+04E0 7954            664             MOV R1, #54H
+04E2 907001          665             MOV DPTR, #7001H
+04E5 756604          666             MOV COUNT9, #4H
+04E8 12042A          667             LCALL READ_DATA
+04EB 22              668             RET
+                     669     
+                     670     END
+                             
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE    12
+
+SYMBOL TABLE LISTING
+------ ----- -------
+
+
+N A M E             T Y P E  V A L U E   ATTRIBUTES
+
+ADD_LOWL . . . . .  N NUMB   0060H   A   
+AUTH_FAIL. . . . .  C ADDR   02D6H   A   
+AUTH_MSG . . . . .  C ADDR   01F6H   A   
+B. . . . . . . . .  D ADDR   00F0H   A   
+BEGIN. . . . . . .  C ADDR   0100H   A   
+BELL_KEY . . . . .  B ADDR   00B0H.4 A   
+CHECK_KEY. . . . .  C ADDR   0242H   A   
+CLOCK. . . . . . .  C ADDR   04C6H   A   
+CMD. . . . . . . .  C ADDR   0153H   A   
+CONT_BYTE_R. . . .  N NUMB   00D1H   A   
+CONT_BYTE_W. . . .  N NUMB   00D0H   A   
+COUNT. . . . . . .  N NUMB   0053H   A   
+COUNT6 . . . . . .  N NUMB   006AH   A   
+COUNT7 . . . . . .  N NUMB   006BH   A   
+COUNT8 . . . . . .  N NUMB   0068H   A   
+COUNT9 . . . . . .  N NUMB   0066H   A   
+DAVAVA . . . . . .  N NUMB   0061H   A   
+DAY. . . . . . . .  N NUMB   0067H   A   
+DAYS . . . . . . .  N NUMB   0069H   A   
+DELAY_1SEC . . . .  C ADDR   0235H   A   
+DISP . . . . . . .  C ADDR   0227H   A   
+DISPCH2. . . . . .  C ADDR   0207H   A   
+DISP_DAY . . . . .  C ADDR   0214H   A   
+DISP_MSG . . . . .  C ADDR   0140H   A   
+DPH. . . . . . . .  D ADDR   0083H   A   
+DPL. . . . . . . .  D ADDR   0082H   A   
+EEPROM_DATA. . . .  N NUMB   0064H   A   
+EEPROM_DELAY . . .  C ADDR   04D3H   A   
+EEPROM_DELAY_1 . .  C ADDR   04D6H   A   
+EEPROM_START . . .  C ADDR   0450H   A   
+EEPROM_STOP. . . .  C ADDR   046FH   A   
+EMRG_KEY . . . . .  B ADDR   00B0H.5 A   
+END_SETTIME. . . .  C ADDR   03EBH   A   
+ERROR. . . . . . .  C ADDR   0338H   A   
+ERROR_DAY. . . . .  C ADDR   03D5H   A   
+ERROR_MSG. . . . .  C ADDR   01ADH   A   
+FIRST. . . . . . .  C ADDR   0147H   A   
+FLAG . . . . . . .  N NUMB   0064H   A   
+GET. . . . . . . .  C ADDR   04B2H   A   
+GET_DATA . . . . .  C ADDR   04ADH   A   
+HERE31 . . . . . .  C ADDR   0239H   A   
+HERE4. . . . . . .  C ADDR   0237H   A   
+HOURS. . . . . . .  N NUMB   0052H   A   
+HOURS1 . . . . . .  N NUMB   0059H   A   
+HOURS2 . . . . . .  N NUMB   0062H   A   
+INTI . . . . . . .  C ADDR   0121H   A   
+KEY. . . . . . . .  C ADDR   0286H   A   
+KEYCODE. . . . . .  C ADDR   01D9H   A   
+KEYPD. . . . . . .  C ADDR   0246H   A   
+LOOP . . . . . . .  C ADDR   011CH   A   
+LOOP1. . . . . . .  C ADDR   02FAH   A   
+LOOP2. . . . . . .  C ADDR   0378H   A   
+LOOP3. . . . . . .  C ADDR   03C8H   A   
+LOOP4. . . . . . .  C ADDR   02B7H   A   
+MEMORY_ADDRESS1. .  N NUMB   0062H   A   
+MEMORY_ADDRESS2. .  N NUMB   0063H   A   
+MEM_VAL. . . . . .  N NUMB   0000H   A   
+MESSAGE1 . . . . .  C ADDR   0182H   A   
+MESSAGE2 . . . . .  C ADDR   0193H   A   
+MESSAGE3 . . . . .  C ADDR   01A4H   A   
+A51 MACRO ASSEMBLER  SET_TIME                                                             06/22/2017 16:13:47 PAGE    13
+
+MESSAGE4 . . . . .  C ADDR   01E5H   A   
+MIN. . . . . . . .  N NUMB   0051H   A   
+MIN1 . . . . . . .  N NUMB   0058H   A   
+MINS2. . . . . . .  N NUMB   0063H   A   
+N. . . . . . . . .  C ADDR   0314H   A   
+N1 . . . . . . . .  C ADDR   030CH   A   
+N10. . . . . . . .  C ADDR   03A4H   A   
+N100 . . . . . . .  C ADDR   034EH   A   
+N101 . . . . . . .  C ADDR   02DEH   A   
+N11. . . . . . . .  C ADDR   03A9H   A   
+N12. . . . . . . .  C ADDR   03AEH   A   
+N13. . . . . . . .  C ADDR   03D0H   A   
+N2 . . . . . . . .  C ADDR   0311H   A   
+N3 . . . . . . . .  C ADDR   0324H   A   
+N4 . . . . . . . .  C ADDR   0329H   A   
+N5 . . . . . . . .  C ADDR   0359H   A   
+N6 . . . . . . . .  C ADDR   035EH   A   
+N7 . . . . . . . .  C ADDR   036EH   A   
+N8 . . . . . . . .  C ADDR   0373H   A   
+N9 . . . . . . . .  C ADDR   0380H   A   
+P2 . . . . . . . .  D ADDR   00A0H   A   
+P3 . . . . . . . .  D ADDR   00B0H   A   
+PA1. . . . . . . .  N NUMB   007CH   A   
+PASSWORD . . . . .  C ADDR   01D4H   A   
+READY. . . . . . .  C ADDR   0161H   A   
+READ_DATA. . . . .  C ADDR   042AH   A   
+READ_PASSWORD. . .  C ADDR   04E0H   A   
+REDO . . . . . . .  C ADDR   0280H   A   
+REPEAT1. . . . . .  C ADDR   023BH   A   
+ROW. . . . . . . .  C ADDR   027BH   A   
+SCL. . . . . . . .  N NUMB   00A0H   A   
+SDA. . . . . . . .  N NUMB   00A1H   A   
+SEC. . . . . . . .  N NUMB   0050H   A   
+SECOND . . . . . .  C ADDR   014DH   A   
+SEND . . . . . . .  C ADDR   0490H   A   
+SEND_DATA. . . . .  C ADDR   048EH   A   
+SET_DAY. . . . . .  C ADDR   0383H   A   
+SET_FLAG . . . . .  C ADDR   02C5H   A   
+SET_TIME . . . . .  C ADDR   02C9H   A   
+SKIP . . . . . . .  C ADDR   020EH   A   
+SKIP1. . . . . . .  C ADDR   0221H   A   
+TIME_KEY . . . . .  B ADDR   00B0H.3 A   
+UP11 . . . . . . .  C ADDR   0208H   A   
+UP12 . . . . . . .  C ADDR   0214H   A   
+UP13 . . . . . . .  C ADDR   021BH   A   
+VER_PASSWD . . . .  C ADDR   029AH   A   
+WAIT . . . . . . .  C ADDR   016AH   A   
+WEEKDAY. . . . . .  C ADDR   01BCH   A   
+WELCOME. . . . . .  C ADDR   0172H   A   
+WRITE_DATA . . . .  C ADDR   03ECH   A   
+
+
+REGISTER BANK(S) USED: 0 
+
+
+ASSEMBLY COMPLETE.  0 WARNING(S), 1 ERROR(S)

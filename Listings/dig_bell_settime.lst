@@ -1,10 +1,10 @@
-A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/21/2017 13:09:01 PAGE     1
+A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/22/2017 15:14:23 PAGE     1
 
 
 MACRO ASSEMBLER A51 V8.02b
 OBJECT MODULE PLACED IN .\Objects\dig_bell_settime.obj
-ASSEMBLER INVOKED BY: C:\Keil_v5\C51\BIN\A51.EXE C:\Users\Srinivas\Documents\dig_bell_settime.asm SET(SMALL) DEBUG PRINT
-                      (.\Listings\dig_bell_settime.lst) OBJECT(.\Objects\dig_bell_settime.obj) EP
+ASSEMBLER INVOKED BY: C:\Keil_v5\C51\BIN\A51.EXE dig_bell_settime.asm SET(SMALL) DEBUG PRINT(.\Listings\dig_bell_settime
+                      .lst) OBJECT(.\Objects\dig_bell_settime.obj) EP
 
 LOC  OBJ            LINE     SOURCE
 
@@ -65,7 +65,7 @@ LOC  OBJ            LINE     SOURCE
   0000                54             MEM_VAL                 EQU     00H
 0100                  55             ORG    0100H
                       56     
-A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/21/2017 13:09:01 PAGE     2
+A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/22/2017 15:14:23 PAGE     2
 
                       57     ;============================================================================
                       58     
@@ -133,7 +133,7 @@ LOC  OBJ            LINE     SOURCE
 014F 120153          120             LCALL CMD
 0152 22              121             RET
                      122     
-A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/21/2017 13:09:01 PAGE     3
+A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/22/2017 15:14:23 PAGE     3
 
                      123     
                      124     
@@ -201,7 +201,7 @@ LOC  OBJ            LINE     SOURCE
                      179     
                      180     
                      181     
-A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/21/2017 13:09:01 PAGE     4
+A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/22/2017 15:14:23 PAGE     4
 
 01A6                 182     DISP:
                      183             ;********************************************
@@ -269,7 +269,7 @@ LOC  OBJ            LINE     SOURCE
 01F1 E590            245             MOV A,90H
 01F3 64F7            246             XRL A,#0F7H
 01F5 7003            247             JNZ ROW
-A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/21/2017 13:09:01 PAGE     5
+A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/22/2017 15:14:23 PAGE     5
 
 01F7 0201C5          248             LJMP KEYPD
                      249      
@@ -334,7 +334,7 @@ LOC  OBJ            LINE     SOURCE
                      306     
                      307     
                      308     END
-A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/21/2017 13:09:01 PAGE     6
+A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/22/2017 15:14:23 PAGE     6
 
 SYMBOL TABLE LISTING
 ------ ----- -------
@@ -402,7 +402,7 @@ SET_TIME . . . . .  C ADDR   0225H   A
 SKIP . . . . . . .  C ADDR   01A0H   A   
 TIME_KEY . . . . .  B ADDR   00B0H.3 A   
 UP11 . . . . . . .  C ADDR   019AH   A   
-A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/21/2017 13:09:01 PAGE     7
+A51 MACRO ASSEMBLER  DIG_BELL_SETTIME                                                     06/22/2017 15:14:23 PAGE     7
 
 WAIT . . . . . . .  C ADDR   016AH   A   
 WELCOME. . . . . .  C ADDR   0172H   A   

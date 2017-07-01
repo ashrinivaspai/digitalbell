@@ -19,15 +19,26 @@ CPU DLL:         S8051.DLL V3.84.0.1
 Dialog DLL:      DP51.DLL V2.62.0.1 
 <h2>Project:</h2>
 C:\Users\Srinivas\Documents\GitHub\digitalbell\mk1.uvproj
-Project File Date:  06/23/2017
+Project File Date:  06/28/2017
 
 <h2>Output:</h2>
 Build target 'Target 1'
-assembling SET_TIME.ASM...
+assembling set_bell_1.asm...
 linking...
-Program Size: data=8.0 xdata=0 code=1763
-creating hex file from ".\Objects\mk1"...
-".\Objects\mk1" - 0 Error(s), 0 Warning(s).
+BL51 BANKED LINKER/LOCATER V6.22 - SN: Eval Version
+COPYRIGHT KEIL ELEKTRONIK GmbH 1987 - 2009
+".\Objects\set_bell_1.obj" 
+TO ".\Objects\mk1" 
+PRINT(".\Listings\mk1.m51") RAMSIZE(256) 
+******************************************************************************
+* RESTRICTED VERSION WITH 0800H BYTE CODE SIZE LIMIT; USED: 0828H BYTE (101%) *
+******************************************************************************
+Program Size: data=8.0 xdata=0 code=2341
+LINK/LOCATE RUN COMPLETE.  0 WARNING(S),  0 ERROR(S)
+*** FATAL ERROR L250: CODE SIZE LIMIT IN RESTRICTED VERSION EXCEEDED
+    MODULE:  .\Objects\set_bell_1.obj (-----)
+    LIMIT:   0800H BYTES
+Target not created.
 Build Time Elapsed:  00:00:00
 </pre>
 </body>

@@ -35,7 +35,7 @@ LJMP BEGIN
 	MIN	            EQU	51H
 	HOURS			EQU	52H
 	DAY		    	EQU	67H
-	COUNT			EQU	53H
+	TEMP_DAY		EQU	53H
 	;COUNT1			EQU 54H
 	;COUNT2         EQU 55H
 	;COUNT3         EQU 56H
@@ -50,7 +50,7 @@ LJMP BEGIN
 	COUNT6          EQU 6AH
 	COUNT8          EQU 68H
 	COUNT9          EQU 66H
-	PA1             EQU 7CH
+	SERIAL          EQU 7CH
 	MEM_VAL			EQU	00H
 
 	ORG    0100H
@@ -60,7 +60,8 @@ LJMP BEGIN
 ;**********************************************************************************************
 
 BEGIN:
-	LCALL INTI 			;CALL THE INITIALIZATION MODULE
+ACALL INTI
+				;CALL THE INITIALIZATION MODULE
 	CLR SCL				;SCL: SERIAL CLOCK LINE ->MEANS THE CLOCK INPUT FOR I2C
 	CLR	SDA 			;SDA: SERIAL DATA I/P & O/P ->MEANS THE INPUR AND OUTPUT LINE
     CLR	P2.2 			;
@@ -69,13 +70,15 @@ BEGIN:
     SETB    SCL 		; 	""		""
     SETB	SDA
     NOP
-    ;LCALL CREATE_PASSWORD
-	CLR 	MEM_VAL 	;
-	LCALL FIRST 		;MOVE THE CURSOR TO THE BEGINNING OF FIRST LINE
+	ACALL FIRST 		;MOVE THE CURSOR TO THE BEGINNING OF FIRST LINE
+	MOV A, #01H
+	ACALL CMD
 	MOV DPTR, #WELCOME 	;DISPLAY NICE WELCOME MESSAGE
-    LCALL DISPCH2
+    ACALL DISPCH2
+    ;LCALL CREATE_DATA
+    LCALL DELAY_1SEC
     LOOP:				;BEGINNING OF ACTUAL 'MAIN' LOOP
-	LCALL CHECK_KEY 	;CHECK FOR THE PRESS OF THE SET_TIME, SET_BELL, EMERGENCY_KEY
+	ACALL CHECK_KEY 	;CHECK FOR THE PRESS OF THE SET_TIME, SET_BELL, EMERGENCY_KEY
 	SJMP LOOP
 
 ;**********************************************************************************************
@@ -84,17 +87,17 @@ BEGIN:
 ;**********************************************************************************************
 INTI:	
 	MOV A,#3CH			;refer manual for the bit meaning
-	LCALL CMD
+	ACALL CMD
 	MOV A,#3CH 			;DONT KNOW WHY SAME COMMAND IS REPEATER FOR 3 TIMES
-	LCALL CMD 	
+	ACALL CMD 	
 	MOV A,#3CH			;MAY BE TO BE SUPER SURE ABOUT EXECUTION OF IT ;)
-	LCALL CMD
+	ACALL CMD
 	MOV A,#0CH
-	LCALL  CMD
+	ACALL  CMD
 	MOV A,#06H
-	LCALL  CMD
+	ACALL  CMD
 	MOV A,#01
-	LCALL CMD
+	ACALL CMD
 	RET
 
 ;**********************************************************************************************
@@ -102,8 +105,8 @@ INTI:
 ;DEPENDANCIES:DISPCH2, DELAY_1SEC
 ;**********************************************************************************************
 DISP_MSG:
-    LCALL DISPCH2
-    LCALL DELAY_1SEC
+    ACALL DISPCH2
+    ACALL DELAY_1SEC
 	RET
 
 ;**********************************************************************************************
@@ -111,12 +114,12 @@ DISP_MSG:
 ;**********************************************************************************************
 FIRST:
     MOV A,#80H			;look for the these codes in the LCD datasheet
-    LCALL CMD
+    ACALL CMD
     RET
 ;SIMILARLY FOR SECOND LINE
 SECOND:
 	MOV A,#0C0H 	
-	LCALL CMD
+	ACALL CMD
 	RET
 
 ;***********************************************************************************************
@@ -126,7 +129,7 @@ SECOND:
 ;DEPENDANCIES: READY
 ;***********************************************************************************************
 CMD:	
-	LCALL READY
+	ACALL READY
 	MOV  80H,A
 	CLR 0A5H			; low on RS
 	CLR 0A6H
@@ -161,10 +164,16 @@ ERROR_MSG: DB 'INVALID NUMBER', 0FH
 WEEKDAY: DB '000','MON','TUE','WED', 'THU', 'FRI', 'SAT', 'SUN' 
 PASSWORD: DB '1234',0FH
 KEYCODE:DB '1','2','3','4','5','6','7','8','9','*','0','#'
-MESSAGE4: DB ' ENTER PASSWORD',0FH
-MESSAGE5: DB '  SET TIME IS', 0FH
-AUTH_MSG: DB ' INCORRECT  PIN', 0FH
+AUTH_MSG: DB '  ENTER THE PIN',0FH
+MESSAGE5: DB '  TIME IS SET!', 0FH
+AUTH_FAIL_MSG: DB ' INCORRECT  PIN', 0FH
 EMERGENCY_MSG: DB '   EMERGENCY', 0FH
+BELL_MESSAGE: DB ' SELECT OPTION',0FH
+BELL_OPTIONS: DB '1)NEW  2)EDIT',0FH
+BELL_NUMBER_MSG: DB ' SL. NO.[1-',0FH
+NO_BELL: DB '  NO BELLS SET',0FH
+;TEMP: DB 12H,23H,01H
+NEW_BELL_MSG: DB ' NEW BELL TIME', 0FH
 ;***********************************************************************************************
 ;									 END of LOOK-UP TABLES
 ;***********************************************************************************************
@@ -181,7 +190,7 @@ EMERGENCY_MSG: DB '   EMERGENCY', 0FH
 DISPCH2:
 	nop
 	MOV A, #0CH 			;TURNING OFF THE CURSOR
-	LCALL CMD
+	ACALL CMD
 	UP11:	
 		CLR A
 		MOVC A,@A+DPTR 		;use lookup table to get ascii character
@@ -189,7 +198,7 @@ DISPCH2:
 		RET		
 	SKIP:	
 		INC DPTR
-		LCALL  DISP 		
+		ACALL  DISP 		
 		SJMP UP11
 
 ;***********************************************************************************************
@@ -213,17 +222,17 @@ DISP_DAY:
 			RET		
 	SKIP1:	
 		INC DPTR
-		LCALL  DISP
+		ACALL  DISP
 		SJMP UP13
 
 ;************************************************************************************************
 ;This module takes character to be displayed in the Acc. and displys it on LCD(only one char)
-;Parameters:Acc.
+;Parameters:Acc.  
 ;Return:None
 ;DEPENDANCIES: READY
 ;************************************************************************************************
 DISP:
-	LCALL READY	
+	ACALL READY	
 	MOV 80H, A 				;80h is the address of the pin on 8051 which is connected to the 
 	SETB 0A5H	 			; high RS
 	CLR	0A6H				; A6h is the R/WBAR
@@ -246,8 +255,9 @@ DELAY_1SEC:
 				    DJNZ	R7,HERE4	
 					RET
 
-DELAY_500MSEC: 				;these push instruction will ensure that everything will work fine by saving the 
-	PUSH 07H 				;... value of the register used by the function that called it
+DELAY_500MSEC:
+	PUSH 07H 	;these push instruction will ensure that everything will work fine by saving the 			
+				;... value of the register used by the function that called it
 	PUSH 06H
 	PUSH 04H
 	MOV R7,#5	
@@ -273,9 +283,12 @@ DELAY_500MSEC: 				;these push instruction will ensure that everything will work
 ;*************************************************************************************************
 CHECK_KEY:
 	JNB TIME_KEY, SETT_TIME	;PLEASE NOTICE THE DOUBLE 'T'
+	;SJMP SETT_TIME
 	CHECKING_BELL:
-	;JNB BELL_KEY, SET_BELL
+	JNB BELL_KEY, SETT_BELL
+	CHECKING_EMERGENCY:
 	JNB EMRG_KEY, EMMERGENCY
+	END_CHECK_KEY:
 	RET
 
 ;*************************************************************************************************
@@ -284,16 +297,18 @@ CHECK_KEY:
 ;*************************************************************************************************
 
 SETT_TIME:
-	LCALL SET_TIME 			;WE REQUIRE THIS MANIPULATION BECAUSE
+	ACALL SET_TIME 			;WE REQUIRE THIS MANIPULATION BECAUSE
 							;1)JNB INTERNALLY SJMPs AND SET_TIME IS OUT OF IT'S RANGE				
 							;2)ITS JMP AND NOT CALL AND IN FUTURE WHILE ADDING NEW FEATURES IT MAY CAUSE BUG
 	SJMP CHECKING_BELL 
-;SETT_BELL:
-	;LCALL SET_BELL
-	;RET
+SETT_BELL:
+	ACALL SET_BELL
+
+	SJMP CHECKING_EMERGENCY
 EMMERGENCY:
-	LCALL EMERGENCY
-	RET
+	ACALL EMERGENCY
+	SJMP END_CHECK_KEY
+
 
 ;*************************************************************************************************
 ;This module is used to read the key hit
@@ -345,7 +360,7 @@ KEYPD:
 		INC R5
 		SJMP REDO
 	KEY:
-		LCALL DELAY_500MSEC
+		ACALL DELAY_500MSEC
 		MOV 90H,#0F0H
 		NOP
 		NOP
@@ -366,58 +381,214 @@ KEYPD:
 ;DEPENDANCIES: FIRST, READ_PASSWORD, SECOND, DISPCH2, KEYPD, CMD, DISP
 ;*************************************************************************************************
 
-VER_PASSWD:
+VER_PASSWORD:
 	MOV A, #01H
-	LCALL CMD
-	MOV DPTR, #MESSAGE4 	
-	LCALL DISPCH2			;CAN BE REPLACED WITH DISP_MSG(LATTER WILL ADD 1Sec DELAY)
-	LCALL SECOND
+	ACALL CMD
+	MOV DPTR, #AUTH_MSG
+	ACALL DISPCH2
+	ACALL SECOND
 	MOV R0, #06H
 	MOV A, #14H
 	LOOP5:
-	LCALL CMD
+	ACALL CMD
 	DJNZ R0, LOOP5
-	MOV A, #0EH 			;BLINKING CURSOR
-	LCALL CMD
-	LCALL READ_PASSWORD		;NOW 4 CHARACTER PIN WILL BE LOCATED FROM 54H ONWARDS
-	MOV R0,#54H				;POINTING THE BEGINNING OF THE PIN TO R0						
-	MOV FLAG,#00H
-	MOV R1,#04H				;COUNTER
+	MOV A, #0EH
+	ACALL CMD
+	ACALL READ_PASSWORD
+	MOV R0, #54H
+	MOV FLAG, #00H
+	MOV R1, #4H
 	LOOP4:
-	MOV B, @R0				
-	LCALL KEYPD
-	CJNE A, #2AH, N103 		;IF EQUAL THEN CLEAR EVERYTHING
-	SJMP VER_PASSWD
+	MOV B, @R0
+	ACALL KEYPD
+	CJNE A, #'*', N103
+	SJMP VER_PASSWORD
 	N103:
-	CJNE A,B, SET_FLAG 		;IF NOT EQUAL THEN SET FLAG
+	CJNE A, B, SET_FLAG
 	N102:
-	MOV A, #2AH 				;WE HAVE TO DISPLAY * AND NOT THE DIGIT THAT WAS ENTERED
-	LCALL DISP
-	INC R0 					;POINT TO NEXT DIGIT ON RAM
-	DJNZ R1, LOOP4
-	MOV A, FLAG 			;AS PROMISED RETURN SHOULD BE IN Acc.
+	MOV A, #'*'
+	ACALL DISP
+	INC R0
+	DJNZ R1,LOOP4
+	MOV A, FLAG
 	MOV B, #00H
 	CJNE A, B, AUTH_FAIL
 	RET
 	AUTH_FAIL:
-		MOV A,#01H
-		LCALL CMD
-		MOV DPTR, #AUTH_MSG
-		LCALL DISP_MSG
-		SJMP VER_PASSWD 		;AGAIN GO BACK TO FIRST STEP
-
-SET_FLAG:
-	MOV FLAG, #0FFH
-	SJMP N102
+		MOV A, #01H
+		ACALL CMD
+		MOV DPTR, #AUTH_FAIL_MSG
+		ACALL DISP_MSG
+		SJMP VER_PASSWORD
+	SET_FLAG:
+		MOV FLAG, #0FFH
+		SJMP N102		
 
 EMERGENCY:
-	LCALL VER_PASSWD
+	ACALL VER_PASSWORD
 	MOV A, #01H
-	LCALL CMD
+	ACALL CMD
 	MOV DPTR, #EMERGENCY_MSG
-	LCALL DISPCH2
+	ACALL DISPCH2
 	;DO WHATEVER NEEDS TO BE DONE
 	RET
+
+
+SET_BELL:
+	;ACALL VER_PASSWORD
+	SET_BELL_VERIFIED:
+	MOV A, #01H
+	ACALL CMD
+	MOV DPTR, #BELL_MESSAGE
+	ACALL DISPCH2
+	ACALL SECOND
+	MOV DPTR, #BELL_OPTIONS
+	ACALL DISPCH2
+	MOV A, #0EH
+	ACALL CMD
+	LOOP8: 
+		ACALL KEYPD
+		MOV B, #31H
+		CJNE A, B, N14
+		JMP NEW_BELL
+		N14:
+		MOV B, #32H
+	CJNE A, B, LOOP8
+
+	EDIT_BELL:
+	ACALL INPUT_DAY  	;now accumulator will contain the day value
+	MOV TEMP_DAY, A
+	;Load number of bells available for that day
+	MOV DPTR, #00H
+	MOV DPL, A
+	MOV R1, #50H
+	MOV COUNT9, #01H
+	ACALL READ_DATA
+	MOV R1, #50H
+	MOV A, @R1
+	
+	MOV B, #00H
+	CJNE A, B, HAS_BELL_ENTRY	;if its non zero then that means it has entry
+	MOV DPTR, #NO_BELL
+	ACALL DISPCH2
+	ACALL DELAY_1SEC
+	SJMP SET_BELL_VERIFIED  	;if its zero then give user chance to make an entry
+
+	HAS_BELL_ENTRY:
+	MOV A, TEMP_DAY
+	MOV DPTR, #00H
+	MOV DPL, A
+	MOV R1, #50H
+	MOV COUNT9, #01H
+	ACALL READ_DATA
+	MOV R1, #50H
+	MOV A, @R1
+	PUSH ACC
+	MOV A, #01H 				;clear screen
+	ACALL CMD
+	MOV DPTR, #BELL_NUMBER_MSG 	;display number of bells i.e., max count
+	ACALL DISPCH2
+	POP ACC 					;will contain max serial number
+	ACALL HEX_BCD 				;converts to bcd and output will be in acc[lower two dig] and r2[only for 3 dig BCD]
+	PUSH ACC 					;saving the bcd converted value	
+	ACALL DISP_2DIG_NO 			
+	MOV A, #']'
+	ACALL DISP 					
+	ACALL SECOND
+	MOV A, #0FH
+	ACALL CMD
+	POP ACC 					;copy the value of max. serial number in ACC
+	MOV 40H, ACC
+	ACALL UNPACK 				;now r2 and r3 will contain ascii value of the bcd number
+	MOV B, #04H
+	MOV A, #14H
+	LOOP9:
+	LCALL CMD
+	DJNZ B, LOOP9
+	ACALL KEYPD
+	ACALL DISP
+	CJNE A, #'*', CONTINUE_1
+	SJMP HAS_BELL_ENTRY
+	CONTINUE_1:
+	CJNE A, #'#', CONTINUE_2
+	SJMP ERROR_EDIT_BELL
+	CONTINUE_2:
+	CLR C
+	PUSH ACC 					;contains the 1st number in acsii mode 
+	SUBB A, R3 					;r3= msb of the max serial number in ascii
+	JC NEXT_ENTRY               
+	JZ NEXT_ENTRY
+	SJMP ERROR_EDIT_BELL
+	NEXT_ENTRY:
+	POP ACC 					;contains ascii value of first endtered key
+	SUBB A, #30H 
+	SWAP A 
+	MOV R1, A  					;now r1 will contain msb of the entered number
+	PUSH 01H 					;save this value
+	ACALL KEYPD
+	ACALL DISP
+	CLR C
+	CJNE A, #'*', CONTINUE_3
+	SJMP HAS_BELL_ENTRY
+	CONTINUE_3:
+	CJNE A, #'#', CONTINUE_4
+	SJMP ERROR_EDIT_BELL
+	CONTINUE_4:
+	CLR C 
+	PUSH ACC
+	SUBB A, R2
+	JC DONE_ENTERING_SERIAL
+	JZ DONE_ENTERING_SERIAL
+	SJMP ERROR_EDIT_BELL
+	DONE_ENTERING_SERIAL:
+	POP ACC 				;now A will contain the second digit in ascii format
+	CLR C
+	SUBB A, #30H
+	POP 01H
+	ADD A, R1 				;now acc will contain the user entered serial in bcd mode
+	ACALL BCD_HEX
+	MOV SERIAL, A 			;saving the value of serial safely in the RAM
+	MOV DPH, TEMP_DAY
+	MOV B, #03H
+	MUL AB
+	MOV DPL,A
+	MOV R1, #54H
+	MOV COUNT9, #03H
+	LCALL READ_DATA
+	MOV HOURS, 54H
+	MOV MIN, 55H
+	MOV A, #' '
+	LCALL DISP
+	LCALL DISP_TIME
+	WAIT_FOR_ENTER:
+	ACALL KEYPD
+	CJNE A, #2AH, N14
+	JMP HAS_BELL_ENTRY
+	N14:
+	CJNE A, #23H, WAIT_FOR_ENTER
+	MOV A, #01H
+	ACALL CMD
+	MOV DPTR, #NEW_BELL_MSG
+	ACALL DISPCH2
+	ACALL SECOND
+	MOV B, #05
+	;FUNCTION
+	
+
+	RET
+
+	NEW_BELL:
+	RET
+ERROR_EDIT_BELL:
+	MOV A, #01H
+	LCALL CMD
+	MOV DPTR, #ERROR_MSG
+	LCALL DISP_MSG
+	LCALL DELAY_1SEC
+	LCALL DELAY_1SEC
+	JMP HAS_BELL_ENTRY
+
+
 
 
 ;*************************************************************************************************
@@ -425,30 +596,30 @@ EMERGENCY:
 ;entered then user will again be asked to enter password and only reset breaks the loop
 ;Parameters:None
 ;Return:None(affects the RTC time)
-;DEPENDANCIES: VER_PASSWD, FIRST, SECOND, DISP_MSG, DISP_DAY, CMD, KEYPD, DISP, ERROR, ERROR_DAY
+;DEPENDANCIES: VER_PASSWORD, FIRST, SECOND, DISP_MSG, DISP_DAY, CMD, KEYPD, DISP, ERROR, ERROR_DAY
 ;   			DELAY_1SEC, READ_RTC
 ;*************************************************************************************************
 
 SET_TIME:
-	LCALL VER_PASSWD 		;ENTER PASSWORD VER MODULE
+	ACALL VER_PASSWORD 		;ENTER PASSWORD VER MODULE
 	N101:
 	MOV A, #01H
-	LCALL CMD
+	ACALL CMD
 	MOV DPTR, #MESSAGE1
-	LCALL DISP_MSG
-	LCALL SECOND			;MOVING CURSOR TO SECOND LINE
+	ACALL DISP_MSG
+	ACALL SECOND			;MOVING CURSOR TO SECOND LINE
 	MOV DPTR, #MESSAGE2
-	LCALL DISP_MSG
-	LCALL SECOND
+	ACALL DISP_MSG
+	ACALL SECOND
 	MOV A, #0FH 			;TURNING ON THE CURSOR
-	LCALL CMD
+	ACALL CMD
 	MOV R1, #5H 			;SHIFTING CURSOR 5 TIMES
 	LOOP1: MOV A, #14H	
-	LCALL CMD
+	ACALL CMD
 	DJNZ R1, LOOP1
 	;STARTING TO READ THE VALUE OF HOUR
-	LCALL KEYPD
-	LCALL DISP
+	ACALL KEYPD
+	ACALL DISP
 	CJNE A, #23H, N1		;COMPARING THE VALUE OF KEY WITH #
 	SJMP ERROR
 	N1:
@@ -464,8 +635,8 @@ SET_TIME:
 	SUBB A, #30H 			;ASCII ADJUSTMENTS
 	SWAP A 					;EX: 31H-30H=01H AFTER SWAPPING IT WILL BE 10H
 	MOV R1, A 				;SAVING THE VALUE OF A
-	LCALL KEYPD
-	LCALL DISP
+	ACALL KEYPD
+	ACALL DISP
 	CJNE A, #23H, N3		;COMPARING THE VALUE OF KEY WITH #
 	JMP ERROR
 	N3:
@@ -480,25 +651,25 @@ SET_TIME:
 	SUBB A,#25H				;CHECKING IF THE HOUR VALUE IS GRATER THAN 24
 	JNC ERROR 
 	MOV A, #14H				;SHIFT CURSOR RIGHT ONCE TO AVOID THE COLON
-	LCALL CMD
+	ACALL CMD
 	MOV ADD_LOWL, #02H
 	MOV DAVAVA, R1
-	LCALL WRITE_BYTE
+	ACALL WRITE_BYTE
 	SJMP N100
 	;START OF ERROR HANDLING
 
 	ERROR:
-		LCALL FIRST
+		ACALL FIRST
 		MOV DPTR, #ERROR_MSG
-		LCALL DISP_MSG
-		LCALL DELAY_1SEC
-		LCALL DELAY_1SEC
+		ACALL DISP_MSG
+		ACALL DELAY_1SEC
+		ACALL DELAY_1SEC
 	JMP N101
 
 	;STARTING TO READ THE MINUTES 
 	N100:
-	LCALL KEYPD
-	LCALL DISP
+	ACALL KEYPD
+	ACALL DISP
 	CJNE A, #23H, N5		;COMPARING THE VALUE OF KEY WITH #
 	SJMP ERROR
 	N5:
@@ -514,8 +685,8 @@ SET_TIME:
 	SUBB A, #30H 			;AGAIN SAME PROCEDURES AS DONE WITH HOURS
 	SWAP A
 	MOV R0, A 
-	LCALL KEYPD
-	LCALL DISP
+	ACALL KEYPD
+	ACALL DISP
 	CJNE A, #23H, N7		;COMPARING THE VALUE OF KEY WITH #
 	SJMP ERROR
 	N7:
@@ -527,9 +698,9 @@ SET_TIME:
 	ADD A, R0
 	MOV R0,A
 	MOV A, #0CH 			;TURNING OFF THE CURSOR
-	LCALL CMD
+	ACALL CMD
 	LOOP2:
-	LCALL KEYPD
+	ACALL KEYPD
 	CJNE A, #2AH, N9
 	JMP N101
 	N9:
@@ -537,91 +708,40 @@ SET_TIME:
 	;HERE ADD ROUTINE TO PASS CMD TO RTC TO SET TIME
 	MOV ADD_LOWL, #01H
 	MOV DAVAVA, R0
-	LCALL WRITE_BYTE
+	ACALL WRITE_BYTE
+
 	;STARTING TO READ THE WEEK DAY
-	SET_DAY:
-		MOV A, #1H 				;CLEARING THE SCREEN TO BEGIN FRESH
-		LCALL CMD
-		MOV DPTR, #MESSAGE3
-		LCALL DISP_MSG
-		LCALL SECOND			;BRINGING THE CURSOR TO SECOND LINE FIRST POSITION
-		LCALL CMD
-		MOV A, #0FH 			;TURNING ON THE CURSOR
-		LCALL CMD
-		MOV R0, #5H 			;SHIFTING THE CURSOR TO THE MIDDLE
-		MOV A, #14H 			
-		LOOP6:
-		LCALL CMD
-		DJNZ R0, LOOP6
-		LCALL KEYPD				;READ A CHARACTER
-		
-		LCALL DISP
-		CJNE A, #23H, N10		;COMPARING THE VALUE OF KEY WITH #
-		SJMP ERROR_DAY
-		N10:
-		CJNE A, #2AH, N11		;COMPARING THE VALUE OF KEY WITH *
-		SJMP ERROR_DAY
-		N11:
-		CJNE A, #30H, N12		;COMPARING THE VALUE OF KEY WITH 0 AS VALID CHARACTERS ARE ONLY 1-7
-		SJMP ERROR_DAY
-		N12:
-		MOV R1,A 				;SAVING THE VALUE OF A
-		PUSH 01H				;THE DISP_DAY FUNCTION WIHICH WE WILL USE LATER WILL USE R1 AS ONE OF ITS VARIABLES
-		CLR C  					;... SO WE HAVE TO USE PUSH TO SAVE R1
-		SUBB A, #38H 			;ERROR CHECKING BY CHECKING IF THE ANSWER COMES OUT NEGATIVE
-		JNC ERROR_DAY 			;EX: INPUT IS 37H(VALID) SO 37H-38H=-1H HENCE C=1. HENCE VALID
-		CLR C 					;EX: IF INPUT IS 39H(INVALID) SO ASNWER IS 1H AND C=0. HENCE INVALID
-		MOV A, #14H				;SHIFTING RIGHT CURSOR TO GIVE SPACE
-		LCALL CMD 
-		MOV A,R1 				;RESTORING THE VALUE OF A
-		SUBB A, #30H 			;GETTING ACTUAL VALUE FROM ASCII VALUE
-		MOV B, #3H 				;IN THE LOOK-UP TABLE NAMED 'WEEKDAY' EACH WEEKDAY LENGTH IS 3
-		MUL AB 					;HENCE TO GET ACTUAL OFFSET WE HAVE TO MULTIPLY BASE BY 3 AND ADD IT TO DPTR
-		LCALL DISP_DAY			;DISPLAYING THE DAY AS SOON AS WE PRESS THE KEY
-		MOV A, #0CH
-		LCALL CMD
-		LOOP3: 					;THIS LOOP IS FOR USER TO ENTER 'ENTER KEY'
-		LCALL KEYPD				;INPUTTING THE ENTER KEY OR CLEAR KEY
-		CJNE A, #2AH, N13 		;IF USER ENTERS * WHOLE SCREEN IS RESET
-		JMP SET_DAY
-		N13:
-		CJNE A, #23H, LOOP3 	;IF USER ENTERS # IT IS CONSIDERED AS 'ENTER KEY'
-		POP 01H 				;01H STANDS FOR R1
-		MOV A, R1
-		CLR C 
-		SUBB A, #30H 			;MOV THIS ACC VALUE TO RTC
-		;WRITE ROUTINE TO SEND DAY TO RTC
-		MOV ADD_LOWL, #03H
-		MOV DAVAVA, A
-		LCALL WRITE_BYTE
-		SJMP END_SETTIME 		;JUMP TO END OF THIS ROUTINE
+	ACALL INPUT_DAY 		;day value will be present in acc.
+
+	MOV ADD_LOWL, #03H 		;starting to send the data to RTC
+	MOV DAVAVA, A
+	ACALL WRITE_BYTE 		;write the data to RTC
+	SJMP END_SETTIME 		;JUMP TO END OF THIS ROUTINE
 	;START OF ERROR HANDLING
 
-	ERROR_DAY:
-		LCALL FIRST 			;MOVING THE CURSOR TO FIRST LINE AS THE ERROR HAS TO BE PRINTED IN FIRST LINE
-		MOV A, #0CH 			;TURNING OFF THE CURSOR
-		LCALL CMD
-		MOV DPTR, #ERROR_MSG
-		LCALL DISP_MSG
-		LCALL DELAY_1SEC
-		LCALL DELAY_1SEC
-		JMP SET_DAY
+	
 
 	END_SETTIME:
 		MOV A, #01H
-		LCALL CMD
+		ACALL CMD
 		MOV DPTR, #MESSAGE5
-		LCALL DISP_MSG
-		LCALL SECOND
-		LCALL READ_RTC
+		ACALL DISP_MSG
+		ACALL SECOND
+		ACALL READ_RTC
 		PUSH 01H
 		MOV R1, #03H
 		MOV A, #14H
 		LOOP7:
-		LCALL CMD
+		ACALL CMD
 		DJNZ R1, LOOP7
 		POP 01H
-		LCALL DISP_TIME
+		ACALL DISP_TIME
+		MOV A, #20H
+		ACALL DISP
+		MOV A, DAY
+		MOV B, #3H 				;IN THE LOOK-UP TABLE NAMED 'WEEKDAY' EACH WEEKDAY LENGTH IS 3
+		MUL AB 					;HENCE TO GET ACTUAL OFFSET WE HAVE TO MULTIPLY BASE BY 3 AND ADD IT TO DPTR
+		ACALL DISP_DAY			;while calling the DISP_DAY module make sure that 
 
 
 	RET
@@ -632,7 +752,7 @@ SET_TIME:
 ;COUNT9. Rest everything is handled by this module
 ;DEPENDANCIES:EEPROM_START, EEPROM_DELAY, SEND_DATA, EEPROM_STOP
 ;*************************************************************************************************
-WRITE_DATA:     
+WRITE_DATA:   
 	CALL EEPROM_START
 	MOV A,#0A0H          
 	CALL SEND_DATA
@@ -644,8 +764,8 @@ WRITE_DATA:
 	MOV A,EEPROM_DATA      	;DATA TO BE SEND
 	CALL SEND_DATA
 	CALL EEPROM_STOP
-	LCALL EEPROM_DELAY
-	LCALL EEPROM_DELAY
+	ACALL EEPROM_DELAY
+	ACALL EEPROM_DELAY
 	CALL EEPROM_START
 	MOV A,#0A0H          
 	CALL SEND_DATA
@@ -657,8 +777,8 @@ WRITE_DATA:
 	MOV A,EEPROM_DATA        ;DATA TO BE SEND
 	CALL SEND_DATA
 	CALL EEPROM_STOP
-	LCALL	EEPROM_DELAY
-	LCALL	EEPROM_DELAY
+	ACALL	EEPROM_DELAY
+	ACALL	EEPROM_DELAY
 	INC DPTR
 	INC R0
 	DJNZ COUNT9,WRITE_DATA 
@@ -672,7 +792,7 @@ WRITE_DATA:
 ;Return:data on RAM location pointed by R1
 ;DEPENDANCIES:EEPROM_START, EEPROM_DELAY,SEND_DATA, EEPROM_STOP
 ;*************************************************************************************************
-READ_DATA:      
+READ_DATA:     
 	CALL EEPROM_START
 	MOV A,#0A0H
 	CALL SEND_DATA
@@ -685,8 +805,8 @@ READ_DATA:
 	CALL SEND_DATA
 	CALL GET_DATA
 	CALL EEPROM_STOP
-	LCALL	EEPROM_DELAY
-	LCALL	EEPROM_DELAY
+	ACALL	EEPROM_DELAY
+	ACALL	EEPROM_DELAY
 	INC DPTR
 	MOV @R1,3CH				 ; STORE
 	INC R1				
@@ -862,30 +982,10 @@ EEPROM_DELAY:
 ;DEPENDANCIES:READ_DATA
 ;*************************************************************************************************
 READ_PASSWORD:
-	PUSH 01H
 	MOV R1, #54H
 	MOV DPTR, #7001H
 	MOV COUNT9, #4H
-	LCALL READ_DATA
-	POP 01H
-	RET
-
-CREATE_PASSWORD:
-
-	MOV COUNT9, #04H
-	MOV DPTR,#PASSWORD
-	MOV R0,#50H
-	UP2:
-	CLR A
-	MOVC A, @A+DPTR
-	MOV @R0, A
-	INC R0
-	INC DPTR
-	DJNZ COUNT9, UP2
-	MOV DPTR, #7001H
-	MOV R0, #50H
-	MOV COUNT9, #04H
-	LCALL WRITE_DATA
+	ACALL READ_DATA
 	RET
 
 ;*************************************************************************************************
@@ -898,20 +998,20 @@ WRITE_BYTE:
 	CLR     SDA                   ;start bit
 	CLR     SCL
 	MOV     A,#CONT_BYTE_W        ;send control byte
-	LCALL   LOOP_BYTE
+	ACALL   LOOP_BYTE
 	SETB    SDA
 	SETB    SCL
 	CPL		0B0H
 	JB      SDA,WRITE_BYTE        ;loop until busy
 	CLR     SCL
 	MOV     A,ADD_LOWL             ;send address low
-	LCALL   LOOP_BYTE
+	ACALL   LOOP_BYTE
 	SETB    SDA
 	SETB    SCL
 	JB      SDA,WRITE_BYTE        ;loop until busy
 	CLR     SCL
 	MOV     A,DAVAVA                ;send DAVAVA
-	LCALL   LOOP_BYTE
+	ACALL   LOOP_BYTE
 	SETB    SDA
 	SETB    SCL
 	JB      SDA,WRITE_BYTE        ;loop until busy
@@ -948,21 +1048,21 @@ LOOP_BYTE:
 ;*************************************************************************************************
 READ_RTC:
 	MOV     ADD_LOWL,#00h
-	LCALL   READ_BYTE
+	ACALL   READ_BYTE
 	MOV 	SEC,DAVAVA
-	LCALL	I2C_STOP						   
+	ACALL	I2C_STOP						   
 	MOV     ADD_LOWL,#01h
-	LCALL   READ_BYTE
+	ACALL   READ_BYTE
 	MOV 	MIN,DAVAVA
-	LCALL	I2C_STOP
+	ACALL	I2C_STOP
 	MOV     ADD_LOWL,#02h
-	LCALL   READ_BYTE
+	ACALL   READ_BYTE
 	MOV 	HOURS,DAVAVA
-	LCALL	I2C_STOP
+	ACALL	I2C_STOP
 	 MOV     ADD_LOWL,#03h
-	LCALL   READ_BYTE
+	ACALL   READ_BYTE
 	MOV 	DAY,DAVAVA
-	LCALL	I2C_STOP
+	ACALL	I2C_STOP
     RET
 
 ;*************************************************************************************************
@@ -975,13 +1075,13 @@ READ_BYTE:
 	CLR     SDA                   ;start bit
 	CLR     SCL
 	MOV     A,#CONT_BYTE_W        ;send control byte
-	LCALL   LOOP_BYTE
+	ACALL   LOOP_BYTE
 	SETB    SDA
 	SETB    SCL
 	JB      SDA,READ_BYTE         ;loop until busy
 	CLR     SCL
 	MOV     A,ADD_LOWL             ;send address low
-	LCALL   LOOP_BYTE
+	ACALL   LOOP_BYTE
 	SETB    SDA
 	SETB    SCL
 	JB      SDA,READ_BYTE         ;loop until busy
@@ -992,12 +1092,12 @@ READ_BYTE:
 	CLR     SDA                   ;start bit
 	CLR     SCL
 	MOV     A,#CONT_BYTE_R        ;send control byte
-	LCALL   LOOP_BYTE
+	ACALL   LOOP_BYTE
 	SETB    SDA
 	SETB    SCL
 	JB      SDA,READ_BYTE         ;loop until busy
 	CLR     SCL
-	LCALL   LOOP_READ
+	ACALL   LOOP_READ
 	SETB    SDA
 	SETB    SCL
 	CLR     SCL
@@ -1027,7 +1127,11 @@ LOOP_READ:
 	RET
 
 ;*************************************************************************************************
-;
+;This module will prepare the BCD data to display on the LCD
+;Parameters:40h
+;Return:msb in R3 and lsb in R2
+;DEPENDANCIES:None
+;*************************************************************************************************
 UNPACK:
 	MOV A,40h
 	ANL	A,#0FH
@@ -1040,31 +1144,19 @@ UNPACK:
 	MOV	R3,A
 	RET
 
-;****************************************************************
-;This module will display the current RTC time on LCD
+;*************************************************************************************************
+;This module will display the current RTC time on LCD in format HH:mm DAY
+;Parameters:None
+;Return:None
+;DEPENDANCIES:DISP_DAY, DISP, UNPACK
+;*************************************************************************************************
 DISP_TIME:
-	PUSH 40h
 	MOV 40h, HOURS
-	LCALL UNPACK
-	MOV A, R3
-	LCALL DISP
-	MOV A, R2
-	LCALL DISP
-	MOV A, #3AH
-	LCALL DISP
+	ACALL DISP_2DIG_NO
+	MOV A, #':'
+	ACALL DISP
 	MOV 40h, MIN
-	LCALL UNPACK
-	MOV A, R3
-	LCALL DISP
-	MOV A, R2
-	LCALL DISP
-	MOV A, #20H
-	LCALL DISP
-	MOV A, DAY
-	MOV B, #3H 				;IN THE LOOK-UP TABLE NAMED 'WEEKDAY' EACH WEEKDAY LENGTH IS 3
-	MUL AB 					;HENCE TO GET ACTUAL OFFSET WE HAVE TO MULTIPLY BASE BY 3 AND ADD IT TO DPTR
-	LCALL DISP_DAY	
-	POP 40h
+	ACALL DISP_2DIG_NO
 	RET
 
 I2C_Stop:
@@ -1072,6 +1164,151 @@ I2C_Stop:
 	SETB      SCL
 	NOP
 	SETB      SDA
+	RET
+
+;*************************************************************************************************
+;This module takes input from user to enter the day in number from 1-7 and also displays the 3
+;lettered corresponding day beside it
+;Parameter:None
+;Return:day value in Acc
+;DEPENDANCIES:DISP_MSG, SECOND, CMD, ERROR_DAY, KEYPD, DISP_DAY
+;*************************************************************************************************
+INPUT_DAY:
+	MOV A, #1H 				;CLEARING THE SCREEN TO BEGIN FRESH
+	ACALL CMD
+	MOV DPTR, #MESSAGE3
+	ACALL DISP_MSG
+	ACALL SECOND			;BRINGING THE CURSOR TO SECOND LINE FIRST POSITION
+	ACALL CMD
+	MOV A, #0FH 			;TURNING ON THE CURSOR
+	ACALL CMD
+	MOV R0, #5H 			;SHIFTING THE CURSOR TO THE MIDDLE
+	MOV A, #14H 			
+	LOOP6:
+	ACALL CMD
+	DJNZ R0, LOOP6
+	ACALL KEYPD				;READ A CHARACTER
+	ACALL DISP
+	CJNE A, #23H, N10		;COMPARING THE VALUE OF KEY WITH #
+	SJMP ERROR_DAY
+	N10:
+	CJNE A, #2AH, N11		;COMPARING THE VALUE OF KEY WITH *
+	SJMP ERROR_DAY
+	N11:
+	CJNE A, #30H, N12		;COMPARING THE VALUE OF KEY WITH 0 AS VALID CHARACTERS ARE ONLY 1-7
+	SJMP ERROR_DAY
+	N12:
+	MOV R1,A 				;SAVING THE VALUE OF A
+	PUSH 01H				;THE DISP_DAY FUNCTION WIHICH WE WILL USE LATER WILL USE R1 AS ONE OF ITS VARIABLES
+	CLR C  					;... SO WE HAVE TO USE PUSH TO SAVE R1
+	SUBB A, #38H 			;ERROR CHECKING BY CHECKING IF THE ANSWER COMES OUT NEGATIVE
+	JNC ERROR_DAY 			;EX: INPUT IS 37H(VALID) SO 37H-38H=-1H HENCE C=1. HENCE VALID
+	CLR C 					;EX: IF INPUT IS 39H(INVALID) SO ASNWER IS 1H AND C=0. HENCE INVALID
+	MOV A, #14H				;SHIFTING RIGHT CURSOR TO GIVE SPACE
+	ACALL CMD 
+	MOV A,R1 				;RESTORING THE VALUE OF A
+	SUBB A, #30H 			;GETTING ACTUAL VALUE FROM ASCII VALUE
+	MOV B, #3H 				;IN THE LOOK-UP TABLE NAMED 'WEEKDAY' EACH WEEKDAY LENGTH IS 3
+	MUL AB 					;HENCE TO GET ACTUAL OFFSET WE HAVE TO MULTIPLY BASE BY 3 AND ADD IT TO DPTR
+	ACALL DISP_DAY			;DISPLAYING THE DAY AS SOON AS WE PRESS THE KEY
+	MOV A, #0CH
+	ACALL CMD
+	LOOP3: 					;THIS LOOP IS FOR USER TO ENTER 'ENTER KEY'
+	ACALL KEYPD				;INPUTTING THE ENTER KEY OR CLEAR KEY
+	CJNE A, #2AH, N13 		;IF USER ENTERS * WHOLE SCREEN IS RESET
+	JMP INPUT_DAY
+	N13:
+	CJNE A, #23H, LOOP3 	;IF USER ENTERS # IT IS CONSIDERED AS 'ENTER KEY'
+	POP 01H 				;01H STANDS FOR R1
+	MOV A, R1
+	CLR C 
+	SUBB A, #30H 			;USE THIS VALUE OF DAY
+	RET
+
+ERROR_DAY:
+	ACALL FIRST 			;MOVING THE CURSOR TO FIRST LINE AS THE ERROR HAS TO BE PRINTED IN FIRST LINE
+	MOV A, #0CH 			;TURNING OFF THE CURSOR
+	ACALL CMD
+	MOV DPTR, #ERROR_MSG
+	ACALL DISP_MSG
+	ACALL DELAY_1SEC
+	ACALL DELAY_1SEC
+	JMP INPUT_DAY
+
+;*************************************************************************************************
+;This module outputs the 2-digit BCD number on the LCD
+;Parameters:number to be displayed in 40H
+;Return:None
+;DEPENDANCIES:UNPACK, DISP
+;*************************************************************************************************
+
+DISP_2DIG_NO:
+	ACALL UNPACK
+	MOV A, R3
+	ACALL DISP
+	MOV A, R2
+	ACALL DISP
+	RET
+
+
+;*************************************************************************************************
+;This module will convert 8-bit hexadecimal number to corresponding BCD equivalent MSB of 3-dig
+;BCD will be placed in R2 and other two will be in 40H.
+;Parameters:hex number in Acc
+;Return:msb in r2 and 2-dig lsb IN 40H(and Acc)
+;DEPENDANCIES:None
+;*************************************************************************************************
+HEX_BCD:
+	MOV B,#100
+	DIV AB
+	MOV R2, A
+	MOV A, B
+	MOV B, #10
+	DIV AB
+	SWAP A
+	ADD A, B
+	MOV 40H, A
+	RET
+;*************************************************************************************************
+;This module is used to convert from BCD to HEX. 
+;Parameters:data to be converted in the Acc
+;Return: converted data in Acc
+;DEPENDANCIES:None
+;*************************************************************************************************
+BCD_HEX:
+	PUSH ACC
+	ANL A, #0FH
+	MOV R2, A
+	POP ACC
+	ANL A, #0F0H
+	SWAP A
+	MOV B, #0AH 
+	MUL AB
+	ADD A, R2
+	RET
+
+CREATE_DATA:
+
+	MOV COUNT9, #03H
+	MOV DPTR,#TEMP 
+	MOV R0,#58H
+	UP2:
+	CLR A
+	MOVC A, @A+DPTR
+	MOV @R0, A
+	INC R0
+	INC DPTR
+	DJNZ COUNT9, UP2
+	MOV DPTR, #0503H
+	MOV R0, #58H
+	MOV COUNT9, #03H
+	LCALL WRITE_DATA
+	MOV R1, #54H
+	MOV COUNT9, #03H
+	MOV DPTR, #0503H
+	LCALL READ_DATA
+	MOV 40H, 54H
+	LCALL DISP_2DIG_NO
 	RET
 END
 

@@ -1,0 +1,2059 @@
+set_bell_1                                                                                                              PAGE 1
+                         1     ;**********************************************************************************************
+                         2     ;The following set of code is assembly level code for digital bell system
+                         3     ;Author: Sukesh Rao, Srinivas Pai, Sudesh Pai, Gayathri, Arpitha and
+                         4     ;Version: 0.1
+                         5     ;Date:
+                         6     ;**********************************************************************************************
+                         7
+                         8     org 00h
+0000 020100              9     LJMP BEGIN
+                        10
+  00A0                  11             SCL                     EQU     0A0h    ;IN THIS EXAMPLE I USED PORT 2.0
+  00A1                  12             SDA                     EQU     0A1h    ;AND PORT 2.1 FOR THE I2C LINES
+                        13                                                         ;YOU CAN CHANGE THEM TO WHATEVER ACCEPTABLE
+  00B3                  14             TIME_KEY        EQU             P3.3    ;SET_TIME KEY
+  00B4                  15             BELL_KEY        EQU             P3.4    ;SET_BELL KEY
+  00B5                  16             EMRG_KEY        EQU     P3.5    ;EMERGENCY KEY
+                        17
+                        18
+                        19     ;=====THE READ AND WRITE COMMANDS (0D0H AND 0D1H)
+                        20
+  00D0                  21             CONT_BYTE_W             EQU     11010000B
+  00D1                  22             CONT_BYTE_R             EQU     11010001B
+                        23
+                        24             ORG    0060H
+                        25
+  0061                  26             DAVAVA          EQU 61H
+  0060                  27             ADD_LOWL        EQU 60H
+  0062                  28             MEMORY_ADDRESS1 EQU 62H
+  0063                  29             MEMORY_ADDRESS2 EQU 63H
+  0064                  30             EEPROM_DATA     EQU 64H
+                        31
+                        32     ;=====VARIABLES TO STORE THE TIME IN, COULD BE USED ALSO TO STORE DATA TO WRITE ON DS1307
+                        33
+  0050                  34             SEC                         EQU 50H
+  0051                  35             MIN                 EQU 51H
+  0052                  36             HOURS                   EQU     52H
+  0067                  37             DAY                     EQU     67H
+  0053                  38             TEMP_DAY                EQU     53H
+                        39             ;HOURS1                 EQU 59H
+                        40             ;MIN1            EQU 58H
+  0064                  41             FLAG1           EQU 64H
+                        42             ;COUNT7          EQU 6BH
+  0062                  43             BELL_HOUR               EQU     62H
+  0063                  44             BELL_MIN        EQU 63H
+  0064                  45             BELL_DURATION   EQU 64H
+  0065                  46             CURRENT_DAY     EQU 65H
+  006A                  47             DURATION        EQU 6AH
+                        48             ;COUNT8          EQU 68H
+  0066                  49             COUNT9          EQU 66H
+  007C                  50             SERIAL          EQU 7CH
+  0000                  51             MEM_VAL                 EQU     00H
+  007D                  52             MODE                    EQU 7DH
+  0043                  53             TEMP_SERIAL     EQU 43H
+  0041                  54             TEMP_HOUR               EQU 41H
+  0042                  55             TEMP_MIN                EQU 42H
+                        56             ORG    0100H
+                        57
+                        58     ;**********************************************************************************************
+                        59     ;                                                                       CODE BEGINS
+                        60     ;**********************************************************************************************
+                        61
+                        62     BEGIN:
+0100 120130             63             LCALL INTI
+                        64                                     ;CALL THE INITIALIZATION MODULE
+0103 C2A0               65             CLR SCL                         ;SCL: SERIAL CLOCK LINE ->MEANS THE CLOCK INPUT FOR I2C
+0105 C2A1               66             CLR     SDA                     ;SDA: SERIAL DATA I/P & O/P ->MEANS THE INPUR AND OUTPUT LINE
+0107 C2A2               67         CLR P2.2                    ;
+0109 C2B7               68             CLR P3.7                        ;SOME UNECESSARY STATEMENTS
+010B 00                 69         NOP                                 ;ANOTHER UNECESSARY STATEMENT
+010C D2A0               70         SETB    SCL                 ;       ""            ""
+010E D2A1               71         SETB        SDA
+0110 00                 72         NOP
+0111 7401               73             MOV A, #01H
+0113 120162             74             LCALL CMD
+0116 900190             75             MOV DPTR, #WELCOME      ;DISPLAY NICE WELCOME MESSAGE
+0119 1202F5             76         LCALL DISPCH2
+011C 12034E             77         LCALL DELAY_1SEC
+011F 756500             78         MOV CURRENT_DAY, #00H
+                        79         ;LCALL CREATE_DATA
+                        80         LOOP:                               ;BEGINNING OF ACTUAL 'MAIN' LOOP
+0122 120181             81         LCALL DETERMINE_MODE
+0125 757D01             82         MOV MODE, #01H
+0128 120374             83             LCALL CHECK_KEY         ;CHECK FOR THE PRESS OF THE SET_TIME, SET_BELL, EMERGENCY_KEY
+012B 1203E1             84             LCALL CHECK_ALARM       ;CHECK WHETHER WE NEED TO RING THE BELL
+012E 80F2               85             SJMP LOOP
+                        86
+                        87     ;**********************************************************************************************
+                        88     ;This module initializes the LD
+                        89     ;DEPENDANCIES:CMD
+                        90     ;**********************************************************************************************
+                        91     INTI:
+0130 743C               92             MOV A,#3CH                      ;refer manual for the bit meaning
+0132 120162             93             LCALL CMD
+0135 743C               94             MOV A,#3CH                      ;DONT KNOW WHY SAME COMMAND IS REPEATER FOR 3 TIMES
+0137 120162             95             LCALL CMD
+013A 743C               96             MOV A,#3CH                      ;MAY BE TO BE SUPER SURE ABOUT EXECUTION OF IT ;)
+013C 120162             97             LCALL CMD
+013F 740C               98             MOV A,#0CH
+0141 120162             99             LCALL  CMD
+0144 7406              100             MOV A,#06H
+0146 120162            101             LCALL  CMD
+0149 7401              102             MOV A,#01
+014B 120162            103             LCALL CMD
+014E 22                104             RET
+                       105
+                       106     ;**********************************************************************************************
+                       107     ;This module is used to display the message pointed by DPTR on the DPTR on the screen
+                       108     ;DEPENDANCIES:DISPCH2, DELAY_1SEC
+                       109     ;**********************************************************************************************
+                       110     DISP_MSG:
+014F 1202F5            111         LCALL DISPCH2
+0152 12034E            112         LCALL DELAY_1SEC
+0155 22                113             RET
+                       114
+                       115     ;**********************************************************************************************
+                       116     ;This module moves the cursor back to first line first position
+                       117     ;**********************************************************************************************
+                       118     FIRST:
+0156 7480              119         MOV A,#80H                  ;look for the these codes in the LCD datasheet
+0158 120162            120         LCALL CMD
+015B 22                121         RET
+                       122     ;SIMILARLY FOR SECOND LINE
+                       123     SECOND:
+015C 74C0              124             MOV A,#0C0H
+015E 120162            125             LCALL CMD
+0161 22                126             RET
+                       127
+                       128     ;***********************************************************************************************
+                       129     ;This module gives cmd to LCD. Command to be passed to the LCD should be placed in Acc.
+                       130     ;To send a command a high to low signal is sent to the enable pin while the command to be
+                       131     ;sent is place on the data line and the register select(RS) pin is held low.
+                       132     ;DEPENDANCIES: READY
+                       133     ;***********************************************************************************************
+                       134     CMD:
+0162 120170            135             LCALL READY
+0165 F580              136             MOV  80H,A
+0167 C2A5              137             CLR 0A5H                        ; low on RS
+0169 C2A6              138             CLR 0A6H
+016B D2A7              139             SETB 0A7H                       ; high to low on En line
+016D C2A7              140             CLR 0A7H
+016F 22                141             RET
+                       142
+                       143     ;***********************************************************************************************
+                       144     ;This module checks the LCD status whether busy or not and returns from the module only if
+                       145     ;the busy bit/pin/line is 0
+                       146     ;***********************************************************************************************
+                       147     READY:
+0170 C2A7              148         CLR 0A7H                    ;read busy FLAG1
+0172 7580FF            149             MOV     80H,#0FFH
+0175 C2A5              150             CLR     0A5H
+0177 D2A6              151             SETB    0A6H
+                       152             WAIT:
+0179 C2A7              153                     CLR     0A7H
+017B D2A7              154                     SETB    0A7H
+017D 2087F9            155                     JB      87H,WAIT
+0180 22                156             RET
+                       157
+                       158     DETERMINE_MODE:
+0181 907FFF            159             MOV DPTR, #7FFFH
+0184 7954              160             MOV R1, #54H
+0186 756603            161             MOV COUNT9, #03H
+0189 120985            162             LCALL READ_DATA
+018C 85547D            163             MOV MODE, 54H
+018F 22                164             RET
+                       165     ;***********************************************************************************************
+                       166     ;                                                                               LOOK-UP TABLES
+                       167     ;***********************************************************************************************
+0190 2020202057        168     WELCOME:   db '    WELCOME!',0fh
+     454C434F4D
+     45210F
+019D 2020202020        169     MESSAGE1: DB '     HH:MM', 0FH
+     48483A4D4D
+     0F
+01A8 2020202020        170     MESSAGE2: DB '     __:__', 0FH
+     5F5F3A5F5F
+     0F
+01B3 2020202044        171     MESSAGE3: DB '    DAY[1-7]', 0FH
+     41595B312D
+     375D0F
+01C0 494E56414C        172     ERROR_MSG: DB 'INVALID NUMBER', 0FH
+     4944204E55
+     4D4245520F
+01CF 3030304D4F        173     WEEKDAY: DB '000','MON','TUE','WED', 'THU', 'FRI', 'SAT', 'SUN'
+     4E54554557
+     4544544855
+     4652495341
+     5453554E
+01E7 313233340F        174     PASSWORD: DB '1234',0FH
+01EC 3132333435        175     KEYCODE:DB '1','2','3','4','5','6','7','8','9','*','0','#'
+     363738392A
+     3023
+01F8 2020454E54        176     AUTH_MSG: DB '  ENTER THE PIN',0FH
+     4552205448
+     452050494E
+     0F
+0208 202054494D        177     MESSAGE5: DB '  TIME IS SET!', 0FH
+     4520495320
+     534554210F
+0217 20494E434F        178     AUTH_FAIL_MSG: DB ' INCORRECT  PIN', 0FH
+     5252454354
+     202050494E
+     0F
+0227 202020454D        179     EMERGENCY_MSG: DB '   EMERGENCY', 0FH
+     455247454E
+     43590F
+0234 2053454C45        180     BELL_MESSAGE: DB ' SELECT OPTION',0FH
+     4354204F50
+     54494F4E0F
+0243 31294E4557        181     BELL_OPTIONS: DB '1)NEW  2)EDIT',0FH
+     2020322945
+     4449540F
+0251 42454C4C2E        182     BELL_NUMBER_MSG: DB 'BELL. NO.[01-',0FH
+     204E4F2E5B
+     30312D0F
+025F 20204E4F20        183     NO_BELL: DB '  NO BELLS SET',0FH
+     42454C4C53
+     205345540F
+                       184     ;TEMP: DB 12H,23H,01H
+026E 202042454C        185     BELL_ACK_1: DB '  BELL IS SET!',0FH
+     4C20495320
+     534554210F
+027D 2042454C4C        186     SERIAL_NO_1: DB ' BELL NO. IS ', 0FH
+     204E4F2E20
+     4953200F
+028B 204E455720        187     NEW_BELL_MSG: DB ' NEW BELL TIME', 0FH
+     42454C4C20
+     54494D450F
+029A 4455524154        188     EDIT_DURATION: DB 'DURATION[IN SEC]', 0FH
+     494F4E5B49
+     4E20534543
+     5D0F
+02AB 5B312D395D        189     DURATION_MSG: DB '[1-9]: ', 0FH
+     3A200F
+02B3 2020202043        190     CONFIRM: DB '    CONFIRM!',0FH
+     4F4E464952
+     4D210F
+02C0 5345430F          191     SECONDS: DB 'SEC', 0FH
+                       192
+                       193     ;TEMP: DB 0H, 0H, 0H, 0H, 0H, 0H, 0H
+                       194     ;*************************************************************************************************
+                       195     ;                                                                        END of LOOK-UP TABLES
+                       196     ;*************************************************************************************************
+                       197
+                       198     ;*************************************************************************************************
+                       199     ;
+                       200     ;                                                                               DATA MANIPULATION
+                       201     ;                                                                                               &
+                       202     ;                                                                               DISPLAY FUNCTIONS
+                       203     ;
+                       204     ;*************************************************************************************************
+                       205
+                       206
+                       207     ;*************************************************************************************************
+                       208     ;This module will convert 8-bit hexadecimal number to corresponding BCD equivalent MSB of 3-dig
+                       209     ;BCD will be placed in R2 and other two will be in 40H.
+                       210     ;Parameters:hex number in Acc
+                       211     ;Return:msb in r2 and 2-dig lsb IN 40H(and Acc)
+                       212     ;DEPENDANCIES:None
+                       213     ;*************************************************************************************************
+                       214     HEX_BCD:
+02C4 75F064            215             MOV B,#100
+02C7 84                216             DIV AB
+02C8 FA                217             MOV R2, A
+02C9 E5F0              218             MOV A, B
+02CB 75F00A            219             MOV B, #10
+02CE 84                220             DIV AB
+02CF C4                221             SWAP A
+02D0 25F0              222             ADD A, B
+02D2 F540              223             MOV 40H, A
+02D4 22                224             RET
+                       225     ;*************************************************************************************************
+                       226     ;This module is used to convert from BCD to HEX.
+                       227     ;Parameters:data to be converted in the Acc
+                       228     ;Return: converted data in Acc
+                       229     ;DEPENDANCIES:None
+                       230     ;*************************************************************************************************
+                       231     BCD_HEX:
+02D5 C0E0              232             PUSH ACC
+02D7 540F              233             ANL A, #0FH
+02D9 FA                234             MOV R2, A
+02DA D0E0              235             POP ACC
+02DC 54F0              236             ANL A, #0F0H
+02DE C4                237             SWAP A
+02DF 75F00A            238             MOV B, #0AH
+02E2 A4                239             MUL AB
+02E3 2A                240             ADD A, R2
+02E4 22                241             RET
+                       242
+                       243     ;*************************************************************************************************
+                       244     ;This module will prepare the BCD data to display on the LCD
+                       245     ;Parameters:40h
+                       246     ;Return:msb in R3 and lsb in R2
+                       247     ;DEPENDANCIES:None
+                       248     ;*************************************************************************************************
+                       249     UNPACK:
+02E5 E540              250             MOV A,40h
+02E7 540F              251             ANL     A,#0FH
+02E9 2430              252             ADD     A,#30h
+02EB FA                253             MOV     R2,A
+02EC E540              254             MOV A,40h
+02EE C4                255             SWAP    A
+02EF 540F              256             ANL     A,#0FH
+02F1 2430              257             ADD     A,#30H
+02F3 FB                258             MOV     R3,A
+02F4 22                259             RET
+                       260
+                       261     ;***********************************************************************************************
+                       262     ;This module takes the starting address of the string to be displayed in the DPTR and loops
+                       263     ;till it find the string terminator #0FH and also turns the cursor OFF
+                       264     ;Parameters:DPTR holds the starting address of the string
+                       265     ;Return:
+                       266     ;DEPENDANCIES:DISP,CMD
+                       267     ;***********************************************************************************************
+                       268     DISPCH2:
+02F5 00                269             nop
+02F6 740C              270             MOV A, #0CH                     ;TURNING OFF THE CURSOR
+02F8 120162            271             LCALL CMD
+                       272             UP11:
+02FB E4                273                     CLR A
+02FC 93                274                     MOVC A,@A+DPTR          ;use lookup table to get ascii character
+02FD B40F01            275                     CJNE A,#0FH,SKIP111 ;loop till 0xfh is encountered
+0300 22                276                     RET
+                       277             SKIP111:
+0301 A3                278                     INC DPTR
+0302 120322            279                     LCALL  DISP
+0305 80F4              280                     SJMP UP11
+                       281
+                       282     ;***********************************************************************************************
+                       283     ;This module is used to display the 3 lettered day in the LCD give the number of
+                       284     ;corresponding day in Acc.
+                       285     ;Parameters:Acc. holds the day number
+                       286     ;Return:None
+                       287     ;DEPENDANCIES:DISP
+                       288     ;***********************************************************************************************
+                       289     DISP_DAY:
+0307 C001              290             PUSH 01H
+0309 75F003            291             MOV B, #3H                              ;IN THE LOOK-UP TABLE NAMED 'WEEKDAY' EACH WEEKDAY LE
+030C A4                292             MUL AB                                  ;HENCE TO GET ACTUAL OFFSET WE HAVE TO MULTIPLY BASE
+                       293             UP12:
+030D F5F0              294                     MOV B,A                         ;just saving the content of Acc.
+030F 7904              295                     MOV R1, #04H            ;counter
+0311 9001CF            296                     MOV DPTR, #WEEKDAY
+                       297                     UP13:
+0314 E5F0              298                             MOV A,B                 ;you might assume that why to again load to Acc. but
+0316 93                299                             MOVC A,@A+DPTR  ;use lookup table to get ascii character
+0317 D903              300                             DJNZ R1,SKIP1
+0319 D001              301                             POP 01H
+031B 22                302                             RET
+                       303             SKIP1:
+031C A3                304                     INC DPTR
+031D 120322            305                     LCALL  DISP
+0320 80F2              306                     SJMP UP13
+                       307
+                       308     ;************************************************************************************************
+                       309     ;This module takes character to be displayed in the Acc. and displys it on LCD(only one char)
+                       310     ;Parameters:Acc.
+                       311     ;Return:None
+                       312     ;DEPENDANCIES: READY
+                       313     ;************************************************************************************************
+                       314     DISP:
+0322 120170            315             LCALL READY
+0325 F580              316             MOV 80H, A                              ;80h is the address of the pin on 8051 which is conne
+0327 D2A5              317             SETB 0A5H                               ; high RS
+0329 C2A6              318             CLR     0A6H                            ; A6h is the R/WBAR
+032B D2A7              319             SETB 0A7H                               ; high to low En
+032D C2A7              320             CLR     0A7H
+032F 22                321             RET
+                       322
+                       323     ;*************************************************************************************************
+                       324     ;This module outputs the 2-digit BCD number on the LCD
+                       325     ;Parameters:number to be displayed in 40H
+                       326     ;Return:None
+                       327     ;DEPENDANCIES:UNPACK, DISP
+                       328     ;*************************************************************************************************
+                       329
+                       330     DISP_2DIG_NO:
+0330 1202E5            331             LCALL UNPACK
+0333 EB                332             MOV A, R3
+0334 120322            333             LCALL DISP
+0337 EA                334             MOV A, R2
+0338 120322            335             LCALL DISP
+033B 22                336             RET
+                       337     ;*************************************************************************************************
+                       338     ;This module will display the VALUES PRESENT IN HOURS AND MIN VARIABLE on LCD in format HH:mm DAY
+                       339     ;Parameters:HOURS, MIN
+                       340     ;Return:None
+                       341     ;DEPENDANCIES:DISP_DAY, DISP, UNPACK
+                       342     ;*************************************************************************************************
+                       343     DISP_TIME:
+033C 855240            344             MOV 40h, HOURS
+033F 120330            345             LCALL DISP_2DIG_NO
+0342 743A              346             MOV A, #':'
+0344 120322            347             LCALL DISP
+0347 855140            348             MOV 40h, MIN
+034A 120330            349             LCALL DISP_2DIG_NO
+034D 22                350             RET
+                       351
+                       352
+                       353     ;************************************************************************************************
+                       354     ; This module generates delay of 1sec
+                       355     ;************************************************************************************************
+                       356     DELAY_1SEC:
+034E 7F0A              357             MOV R7,#10
+                       358             HERE4:
+0350 7EFF              359                     MOV R6,#0ffh        ;delay routine for firing
+                       360                     HERE31:
+0352 7DFF              361                                     MOV     R5,#0ffH
+                       362                                     REPEAT1:
+0354 DDFE              363                                             DJNZ    R5,REPEAT1
+0356 DEFA              364                                         DJNZ    R6,HERE31
+0358 DFF6              365                                         DJNZ        R7,HERE4
+035A 22                366                                             RET
+                       367
+                       368     DELAY_500MSEC:
+035B C007              369             PUSH 07H        ;these push instruction will ensure that everything will work fine by saving
+                       370                                     ;... value of the register used by the function that called it
+035D C006              371             PUSH 06H
+035F C004              372             PUSH 04H
+0361 7F05              373             MOV R7,#5
+                       374             HERE41:
+0363 7EFF              375                     MOV R6,#0ffh        ;delay routine for firing
+                       376                     HERE311:
+0365 7CFF              377                                     MOV     R4,#0ffH
+                       378                                     REPEAT11:
+0367 DCFE              379                                             DJNZ    R4,REPEAT11
+0369 DEFA              380                                         DJNZ    R6,HERE311
+036B DFF6              381                                         DJNZ        R7,HERE41
+036D D004              382                                         POP 04H
+036F D006              383                                         POP 06H
+0371 D007              384                                         POP 07H
+0373 22                385                                             RET
+                       386
+                       387     ;*************************************************************************************************
+                       388     ;This module is used to recognize the hitting of the key. As the JNB performs the sjmp little
+                       389     ;technique is used to avoid the out of range jmp situation.
+                       390     ;Parameters:None
+                       391     ;Return:None
+                       392     ;DEPENDANCIES: SETT_TIME, SETT_BELL, EMMERGENCY
+                       393     ;*************************************************************************************************
+                       394     CHECK_KEY:
+0374 30B307            395             JNB TIME_KEY, SETT_TIME ;PLEASE NOTICE THE DOUBLE 'T'
+                       396             ;SJMP SETT_TIME
+                       397             CHECKING_BELL:
+0377 30B409            398             JNB BELL_KEY, SETT_BELL
+                       399             CHECKING_EMERGENCY:
+037A 30B50B            400             JNB EMRG_KEY, EMMERGENCY
+                       401             END_CHECK_KEY:
+037D 22                402             RET
+                       403
+                       404     ;*************************************************************************************************
+                       405     ;Following three labels are just used to redirect the control to appropriate locations
+                       406     ;these are needed in order to avoid the below listed two reasons
+                       407     ;*************************************************************************************************
+                       408
+                       409     SETT_TIME:
+037E 1207A8            410             LCALL SET_TIME                  ;WE REQUIRE THIS MANIPULATION BECAUSE
+                       411                                                             ;1)JNB INTERNALLY SJMPs AND SET_TIME IS OUT O
+                       412                                                             ;2)ITS JMP AND NOT CALL AND IN FUTURE WHILE A
+0381 80F4              413             SJMP CHECKING_BELL
+                       414     SETT_BELL:
+0383 1204F1            415             LCALL SET_BELL
+                       416
+0386 80F2              417             SJMP CHECKING_EMERGENCY
+                       418     EMMERGENCY:
+0388 1204E2            419             LCALL EMERGENCY
+038B 80F0              420             SJMP END_CHECK_KEY
+                       421
+                       422
+                       423     ;*************************************************************************************************
+                       424     ;This module is used to read the key hit
+                       425     ;Parameters:None
+                       426     ;Return:Acc
+                       427     ;DEPENDANCIES:DELAY_1SEC
+                       428     ;*************************************************************************************************
+                       429
+                       430     KEYPD:
+038D 7D00              431             MOV R5,#00
+038F 7590FE            432             MOV 90H,#0FEH   ;scan 1st row
+0392 E590              433             MOV A,90H
+0394 64FE              434             XRL A,#0FEH
+0396 702A              435             JNZ ROW
+                       436
+0398 ED                437             MOV A,R5
+0399 2403              438             ADD A,#03H
+039B FD                439             MOV R5,A
+                       440
+039C 7590FD            441             MOV 90H,#0FDH   ;scan 2nd row
+039F E590              442             MOV A,90H
+03A1 64FD              443             XRL A,#0FDH
+03A3 701D              444             JNZ ROW
+03A5 ED                445             MOV A,R5
+03A6 2403              446             ADD A,#03H
+03A8 FD                447             MOV R5,A
+                       448
+03A9 7590FB            449             MOV 90H,#0FBH   ;scan 3rd row
+03AC E590              450             MOV A,90H
+03AE 64FB              451             XRL A,#0FBH
+03B0 7010              452             JNZ ROW
+03B2 ED                453             MOV A,R5
+03B3 2403              454             ADD A,#03H
+03B5 FD                455             MOV R5,A
+                       456
+03B6 7590F7            457             MOV 90H,#0F7H   ;scan 4th row
+03B9 E590              458             MOV A,90H
+03BB 64F7              459             XRL A,#0F7H
+03BD 7003              460             JNZ ROW
+03BF 02038D            461             LJMP KEYPD
+                       462
+                       463             ROW:
+03C2 E590              464                     MOV A,90H
+03C4 54F0              465             ANL A,#0F0H
+03C6 C4                466             SWAP A
+                       467             REDO:
+03C7 13                468                     RRC A
+03C8 5003              469                     JNC KEY
+03CA 0D                470                     INC R5
+03CB 80FA              471                     SJMP REDO
+                       472             KEY:
+03CD 12035B            473                     LCALL DELAY_500MSEC
+03D0 7590F0            474                     MOV 90H,#0F0H
+03D3 00                475                     NOP
+03D4 00                476                     NOP
+03D5 E590              477                     MOV     A,90H
+                       478
+03D7 64F0              479                     XRL     A,#0F0H
+03D9 70F2              480                     JNZ     KEY
+03DB ED                481                     MOV     A,R5
+03DC 9001EC            482                     MOV DPTR,#KEYCODE
+03DF 93                483                     MOVC    A,@A+DPTR
+                       484
+03E0 22                485             RET
+                       486
+                       487
+                       488     CHECK_ALARM:
+03E1 120ACE            489             LCALL READ_RTC
+03E4 E567              490             MOV A, DAY
+03E6 B56511            491             CJNE A, 65H ,  LOAD_NEXT_BELL
+                       492             PROCEED_TO_CMP_TIME:
+03E9 856765            493                     MOV CURRENT_DAY, DAY
+03EC E552              494                     MOV A, HOURS
+03EE B56208            495                     CJNE A, 62H, END_OF_THIS_MODULE
+03F1 E551              496                     MOV A, MIN
+03F3 B56303            497                     CJNE A, 63H, END_OF_THIS_MODULE
+03F6 120408            498                     LCALL RING_BELL
+                       499             END_OF_THIS_MODULE:
+03F9 22                500             RET
+                       501     LOAD_NEXT_BELL:
+03FA 856765            502             MOV CURRENT_DAY, DAY
+03FD 855262            503             MOV BELL_HOUR, HOURS
+0400 855163            504             MOV BELL_MIN, MIN
+0403 12040C            505             LCALL LOAD_NEXT_BELL_MODULE
+0406 80E1              506             SJMP PROCEED_TO_CMP_TIME
+                       507
+                       508     RING_BELL:
+                       509             ;MAKE HIGH ON SOME PIN
+0408 12040C            510             LCALL LOAD_NEXT_BELL_MODULE
+                       511
+040B 22                512             RET
+                       513
+                       514     LOAD_NEXT_BELL_MODULE:
+040C 900000            515             MOV DPTR, #00H
+040F E565              516             MOV A, CURRENT_DAY
+0411 AC7D              517             MOV R4, MODE
+0413 BC0202            518             CJNE R4, #02H, ADD_NOTHING__
+0416 2407              519             ADD A, #07H
+                       520             ADD_NOTHING__:
+0418 F582              521             MOV DPL, A
+041A 756601            522             MOV COUNT9, #01H
+041D 797C              523             MOV R1, #7CH            ;LOCATION OF SERIAL VARIABLE
+041F 7800              524             MOV R0, #00H
+0421 120985            525             LCALL READ_DATA         ;AFTER EXECUTION OF THIS INSTRUCTION SERIAL WILL HAVE MAX COUNT OF BE
+0424 900000            526             MOV DPTR, #00H
+0427 E565              527             MOV A, CURRENT_DAY
+0429 BC0202            528             CJNE R4, #02H, ADD_NOTHING__1
+042C 2407              529             ADD A, #07H
+                       530             ADD_NOTHING__1:
+042E F583              531             MOV DPH, A
+                       532             NEXT_ITERATION:
+0430 08                533             INC R0
+0431 7403              534             MOV A, #03H             ;VALUES START FROM 0X0*00H
+0433 88F0              535             MOV B, R0
+0435 A4                536             MUL AB
+0436 F582              537             MOV DPL, A
+0438 756603            538             MOV COUNT9, #03H
+043B A941              539             MOV R1, 41H             ;41H=TEMP_HOUR AND SO ON
+043D 120985            540             LCALL READ_DATA
+0440 E541              541             MOV A, 41H
+0442 8562F0            542             MOV B, BELL_HOUR
+0445 C3                543             CLR C
+0446 95F0              544             SUBB A, B
+0448 4034              545             JC END_OF_ROUTINE
+044A 700C              546             JNZ POTENTIAL_CANDIDATE
+044C C3                547             CLR C
+044D E542              548             MOV A, 42H
+044F 8563F0            549             MOV B, BELL_MIN
+0452 95F0              550             SUBB A, B
+0454 4028              551             JC END_OF_ROUTINE
+0456 6026              552             JZ END_OF_ROUTINE
+                       553             POTENTIAL_CANDIDATE:
+0458 B80102            554                     CJNE R0, #01H, CHECK_WITH_PREVIOUS_POTENTIAL_CANDIDATE
+045B 8018              555                     SJMP UPDATE_POTENTIAL_CANDIDATE
+                       556                     CHECK_WITH_PREVIOUS_POTENTIAL_CANDIDATE:
+045D E544              557                             MOV A, 44H      ;previous potential value of hour
+045F 8541F0            558                             MOV B, 41H      ;current value of the hour copied from EEPROM
+0462 C3                559                             CLR C
+0463 95F0              560                             SUBB A, B
+0465 500E              561                             JNC UPDATE_POTENTIAL_CANDIDATE
+0467 7015              562                             JNZ END_OF_ROUTINE
+0469 C3                563                             CLR C
+046A E545              564                             MOV A, 45H
+046C 8542F0            565                             MOV B, 42H
+046F 95F0              566                             SUBB A, B
+0471 400B              567                             JC END_OF_ROUTINE
+0473 6009              568                             JZ END_OF_ROUTINE
+                       569                     UPDATE_POTENTIAL_CANDIDATE:
+0475 854144            570                             MOV 44H, 41H
+0478 854245            571                             MOV 45H, 42H
+047B 854346            572                             MOV 46H, 43H
+                       573             END_OF_ROUTINE:
+047E E8                574             MOV A, R0
+047F B57CAE            575             CJNE A, 7CH, NEXT_ITERATION
+0482 854462            576             MOV BELL_HOUR, 44H
+0485 854563            577             MOV BELL_MIN, 45H
+0488 854664            578             MOV BELL_DURATION, 46H
+048B 22                579             RET
+                       580     ;*************************************************************************************************
+                       581     ;This module returns the validity of the entered PIN in the Acc.
+                       582     ;Parameters:None
+                       583     ;Return: Acc.
+                       584     ;DEPENDANCIES: FIRST, READ_PASSWORD, SECOND, DISPCH2, KEYPD, CMD, DISP
+                       585     ;*************************************************************************************************
+                       586
+                       587     VER_PASSWORD:
+048C 7401              588             MOV A, #01H
+048E 120162            589             LCALL CMD
+0491 9001F8            590             MOV DPTR, #AUTH_MSG
+0494 1202F5            591             LCALL DISPCH2
+0497 12015C            592             LCALL SECOND
+049A 7806              593             MOV R0, #06H
+049C 7414              594             MOV A, #14H
+                       595             LOOP5:
+049E 120162            596             LCALL CMD
+04A1 D8FB              597             DJNZ R0, LOOP5
+04A3 740E              598             MOV A, #0EH
+04A5 120162            599             LCALL CMD
+04A8 120A47            600             LCALL READ_PASSWORD
+04AB 7854              601             MOV R0, #54H
+04AD 756400            602             MOV FLAG1, #00H
+04B0 7904              603             MOV R1, #4H
+                       604             LOOP4:
+04B2 86F0              605             MOV B, @R0
+04B4 12038D            606             LCALL KEYPD
+04B7 B42A02            607             CJNE A, #'*', N103
+04BA 80D0              608             SJMP VER_PASSWORD
+                       609             N103:
+04BC B5F01E            610             CJNE A, B, SET_FLAG
+                       611             N102:
+04BF 742A              612             MOV A, #'*'
+04C1 120322            613             LCALL DISP
+04C4 08                614             INC R0
+04C5 D9EB              615             DJNZ R1,LOOP4
+04C7 E564              616             MOV A, FLAG1
+04C9 75F000            617             MOV B, #00H
+04CC B5F001            618             CJNE A, B, AUTH_FAIL
+04CF 22                619             RET
+                       620             AUTH_FAIL:
+04D0 7401              621                     MOV A, #01H
+04D2 120162            622                     LCALL CMD
+04D5 900217            623                     MOV DPTR, #AUTH_FAIL_MSG
+04D8 12014F            624                     LCALL DISP_MSG
+04DB 80AF              625                     SJMP VER_PASSWORD
+                       626             SET_FLAG:
+04DD 7564FF            627                     MOV FLAG1, #0FFH
+04E0 80DD              628                     SJMP N102
+                       629
+                       630     EMERGENCY:
+04E2 12048C            631             LCALL VER_PASSWORD
+04E5 7401              632             MOV A, #01H
+04E7 120162            633             LCALL CMD
+04EA 900227            634             MOV DPTR, #EMERGENCY_MSG
+04ED 1202F5            635             LCALL DISPCH2
+                       636             ;DO WHATEVER NEEDS TO BE DONE
+04F0 22                637             RET
+                       638
+                       639
+                       640     SET_BELL:
+                       641             ;LCALL VER_PASSWORD
+                       642             SET_BELL_VERIFIED:
+04F1 7401              643             MOV A, #01H
+04F3 120162            644             LCALL CMD
+04F6 900234            645             MOV DPTR, #BELL_MESSAGE
+04F9 1202F5            646             LCALL DISPCH2
+04FC 12015C            647             LCALL SECOND
+04FF 900243            648             MOV DPTR, #BELL_OPTIONS
+0502 1202F5            649             LCALL DISPCH2
+0505 740E              650             MOV A, #0EH
+0507 120162            651             LCALL CMD
+                       652             LOOP8:
+050A 12038D            653                     LCALL KEYPD
+050D 75F031            654                     MOV B, #31H
+0510 B5F003            655                     CJNE A, B, N14
+0513 020667            656                     JMP NEW_BELL
+                       657                     N14:
+0516 75F032            658                     MOV B, #32H
+0519 B5F0EE            659             CJNE A, B, LOOP8
+                       660
+                       661             EDIT_BELL:
+051C 1207FA            662             LCALL INPUT_DAY         ;now accumulator will contain the day value
+051F F553              663             MOV TEMP_DAY, A
+                       664             ;Load number of bells available for that day
+0521 900000            665             MOV DPTR, #00H
+0524 AC7D              666             MOV R4, MODE
+0526 7950              667             MOV R1, #50H
+0528 756601            668             MOV COUNT9, #01H
+052B E553              669             MOV A, TEMP_DAY
+052D BC0202            670             CJNE R4, #02H, ITS_MODE_1
+0530 2407              671             ADD A, #07H
+                       672             ITS_MODE_1:
+0532 F582              673             MOV DPL, A
+0534 120985            674             LCALL READ_DATA
+0537 7950              675             MOV R1, #50H
+0539 E7                676             MOV A, @R1
+                       677
+053A 75F000            678             MOV B, #00H
+053D B5F010            679             CJNE A, B, HAS_BELL_ENTRY       ;if its non zero then that means it has entry
+0540 7401              680             MOV A, #01H
+0542 120162            681             LCALL CMD
+0545 90025F            682             MOV DPTR, #NO_BELL
+0548 1202F5            683             LCALL DISPCH2
+054B 12034E            684             LCALL DELAY_1SEC
+054E 80A1              685             SJMP SET_BELL_VERIFIED          ;if its zero then give user chance to make an entry
+                       686
+                       687             HAS_BELL_ENTRY:
+0550 E553              688                     MOV A, TEMP_DAY
+0552 900000            689                     MOV DPTR, #00H
+0555 AC7D              690                     MOV R4, MODE
+0557 BC0202            691                     CJNE R4, #02H, IT_IS_MODE_1
+055A 2407              692                     ADD A, #07H
+                       693                     IT_IS_MODE_1:
+055C F582              694                     MOV DPL, A
+055E 7950              695                     MOV R1, #50H
+0560 756601            696                     MOV COUNT9, #01H
+0563 120985            697                     LCALL READ_DATA
+0566 7950              698                     MOV R1, #50H
+0568 E7                699                     MOV A, @R1
+0569 C0E0              700                     PUSH ACC
+056B 7401              701                     MOV A, #01H                             ;clear screen
+056D 120162            702                     LCALL CMD
+0570 900251            703                     MOV DPTR, #BELL_NUMBER_MSG      ;display number of bells i.e., max count
+0573 1202F5            704                     LCALL DISPCH2
+0576 D0E0              705                     POP ACC                                         ;will contain max serial number
+0578 1202C4            706                     LCALL HEX_BCD                           ;converts to bcd and output will be in acc[lo
+057B C0E0              707                     PUSH ACC                                        ;saving the bcd converted value
+057D 120330            708                     LCALL DISP_2DIG_NO
+0580 745D              709                     MOV A, #']'
+0582 120322            710                     LCALL DISP
+0585 12015C            711                     LCALL SECOND
+0588 740F              712                     MOV A, #0FH
+058A 120162            713                     LCALL CMD
+058D D0E0              714                     POP ACC                                         ;copy the value of max. serial number
+058F 85E040            715                     MOV 40H, ACC
+0592 1202E5            716                     LCALL UNPACK                            ;now r2 and r3 will contain ascii value of th
+0595 75F004            717                     MOV B, #04H
+0598 7414              718                     MOV A, #14H
+                       719                     LOOP9:
+059A 120162            720                     LCALL CMD
+059D D5F0FA            721                     DJNZ B, LOOP9
+05A0 12038D            722                     LCALL KEYPD
+05A3 120322            723                     LCALL DISP
+05A6 B42A02            724                     CJNE A, #'*', CONTINUE_1
+05A9 80A5              725                     SJMP HAS_BELL_ENTRY
+                       726                     CONTINUE_1:
+05AB B42305            727                     CJNE A, #'#', CONTINUE_2
+05AE 1206F9            728                     LCALL ERROR_EDIT_BELL
+05B1 809D              729                     SJMP HAS_BELL_ENTRY
+                       730                     CONTINUE_2:
+05B3 C3                731                     CLR C
+05B4 C0E0              732                     PUSH ACC                                        ;contains the 1st number in acsii mod
+05B6 9B                733                     SUBB A, R3                                      ;r3= msb of the max serial number in
+05B7 4007              734                     JC NEXT_ENTRY
+05B9 6005              735                     JZ NEXT_ENTRY
+05BB 1206F9            736                     LCALL ERROR_EDIT_BELL
+05BE 8090              737                     SJMP HAS_BELL_ENTRY
+                       738                     NEXT_ENTRY:
+05C0 D0E0              739                     POP ACC                                         ;contains ascii value of first endter
+05C2 9430              740                     SUBB A, #30H
+05C4 C4                741                     SWAP A
+05C5 F9                742                     MOV R1, A                                       ;now r1 will contain msb of the enter
+05C6 C001              743                     PUSH 01H                                        ;save this value
+05C8 12038D            744                     LCALL KEYPD
+05CB 120322            745                     LCALL DISP
+05CE C3                746                     CLR C
+05CF B42A02            747                     CJNE A, #'*', CONTINUE_3
+05D2 A150              748                     JMP HAS_BELL_ENTRY
+                       749                     CONTINUE_3:
+05D4 B42305            750                     CJNE A, #'#', CONTINUE_4
+05D7 1206F9            751                     LCALL ERROR_EDIT_BELL
+05DA A150              752                     JMP HAS_BELL_ENTRY
+                       753                     CONTINUE_4:
+05DC C3                754                     CLR C
+05DD C0E0              755                     PUSH ACC
+05DF 9A                756                     SUBB A, R2
+05E0 4007              757                     JC DONE_ENTERING_SERIAL
+05E2 6005              758                     JZ DONE_ENTERING_SERIAL
+05E4 1206F9            759                     LCALL ERROR_EDIT_BELL
+05E7 A150              760                     JMP HAS_BELL_ENTRY
+                       761                     DONE_ENTERING_SERIAL:
+05E9 D0E0              762                     POP ACC                                 ;now A will contain the second digit in ascii
+05EB C3                763                     CLR C
+05EC 9430              764                     SUBB A, #30H
+05EE D001              765                     POP 01H
+05F0 29                766                     ADD A, R1                               ;now acc will contain the user entered serial
+05F1 1202D5            767                     LCALL BCD_HEX
+05F4 F57C              768                     MOV SERIAL, A                   ;saving the value of serial safely in the RAM
+05F6 855383            769                     MOV DPH, TEMP_DAY
+05F9 AC7D              770                     MOV R4, MODE
+05FB E583              771                     MOV A, DPH
+05FD BC0202            772                     CJNE R4, #02H, IT_IS_MODE_1_
+0600 2407              773                     ADD A, #07H
+                       774                     IT_IS_MODE_1_:
+0602 F583              775                     MOV DPH, A
+0604 75F003            776                     MOV B, #03H
+0607 A4                777                     MUL AB
+0608 F582              778                     MOV DPL,A
+060A 7954              779                     MOV R1, #54H
+060C 756603            780                     MOV COUNT9, #03H
+060F 120985            781                     LCALL READ_DATA
+0612 855452            782                     MOV HOURS, 54H
+0615 855551            783                     MOV MIN, 55H
+0618 7420              784                     MOV A, #' '
+061A 120322            785                     LCALL DISP
+061D 12033C            786                     LCALL DISP_TIME
+                       787                     WAIT_FOR_ENTER:                 ;WAITING FOR USER TO CONFIRM THAT HE/SHE WANTS THIS B
+0620 12038D            788                     LCALL KEYPD
+0623 B42A02            789                     CJNE A, #2AH, N15
+0626 A150              790                     JMP HAS_BELL_ENTRY
+                       791                     N15:
+0628 B423F5            792                     CJNE A, #23H, WAIT_FOR_ENTER
+062B 75F001            793                     MOV B, #01H
+062E 12086F            794                     LCALL INPUT_HOUR_MINUTE ;READ THE TIME
+0631 12074B            795                     LCALL INPUT_DURATION
+0634 12071D            796                     LCALL CONFIRM_BELL
+                       797                     WAIT_FOR_ENTER_KEY_1:
+0637 12038D            798                             LCALL KEYPD
+063A B42A02            799                             CJNE A, #2AH, N17
+063D A11C              800                             JMP EDIT_BELL
+                       801                             N17:
+063F B423F5            802                             CJNE A, #23H, WAIT_FOR_ENTER_KEY_1
+0642 7401              803                     MOV A, #01H
+0644 120162            804                     LCALL CMD
+0647 90026E            805                     MOV DPTR, #BELL_ACK_1
+064A 1202F5            806                     LCALL DISPCH2
+064D 855383            807                     MOV DPH, TEMP_DAY
+0650 E583              808                     MOV A, DPH
+0652 AC7D              809                     MOV R4, MODE
+0654 BC0202            810                     CJNE R4, #02H, ITS_MODE_1__
+0657 2407              811                     ADD A, #07H
+                       812                     ITS_MODE_1__:
+0659 F583              813                     MOV DPH, A
+065B E57C              814                     MOV A, SERIAL
+065D 75F003            815                     MOV B, #03H
+0660 A4                816                     MUL AB
+0661 F582              817                     MOV DPL, A
+0663 12070B            818                     LCALL SAVE_BELL
+0666 22                819                     RET
+                       820
+                       821             NEW_BELL:
+0667 1207FA            822                     LCALL INPUT_DAY
+066A F553              823                     MOV TEMP_DAY, A
+066C 75F001            824                     MOV B, #01H
+066F 12086F            825                     LCALL INPUT_HOUR_MINUTE
+0672 12074B            826                     LCALL INPUT_DURATION
+0675 900000            827                     MOV DPTR, #00H
+0678 AC7D              828                     MOV R4, MODE
+067A E553              829                     MOV A, TEMP_DAY
+067C BC0202            830                     CJNE R4, #02H, ADD_NOTHING      ;THIS MEANS MODE 1
+067F 2407              831                     ADD A, #7H
+                       832                     ADD_NOTHING:
+0681 756601            833                     MOV COUNT9, #01H
+0684 7954              834                     MOV R1, #54H
+0686 F582              835                     MOV DPL, A
+0688 120985            836                     LCALL READ_DATA
+068B 85547C            837                     MOV SERIAL, 54H                 ;if needed, add a comp. instruction to limit max coun
+                       838                     ;MOV A, 54H
+                       839                     ;LCALL HEX_BCD
+068E 12071D            840                     LCALL CONFIRM_BELL
+                       841                     WAIT_FOR_ENTER_KEY_2:
+0691 12038D            842                     LCALL KEYPD
+0694 B42A02            843                     CJNE A, #2AH, N18
+0697 80CE              844                     SJMP NEW_BELL
+                       845                     N18:
+0699 B423F5            846                     CJNE A, #23H, WAIT_FOR_ENTER_KEY_2
+069C AC7D              847                     MOV R4, MODE
+069E E553              848                     MOV A, TEMP_DAY
+06A0 BC0102            849                     CJNE R4, #01H, ITS_MODE_2
+06A3 8002              850                     SJMP NOTHING_TO_ADD
+                       851                     ITS_MODE_2:
+06A5 2407              852                     ADD A, #07H
+                       853                     NOTHING_TO_ADD:
+06A7 F583              854                     MOV DPH, A
+06A9 E57C              855                     MOV A, SERIAL
+06AB 04                856                     INC A
+06AC 75F003            857                     MOV B, #03H
+06AF A4                858                     MUL AB
+06B0 F582              859                     MOV DPL, A
+06B2 12070B            860                     LCALL SAVE_BELL
+06B5 7401              861                     MOV A, #01H
+06B7 120162            862                     LCALL CMD
+06BA 120156            863                     LCALL FIRST
+06BD 90026E            864                     MOV DPTR, #BELL_ACK_1
+06C0 12014F            865                     LCALL DISP_MSG
+06C3 12015C            866                     LCALL SECOND
+06C6 90027D            867                     MOV DPTR, #SERIAL_NO_1
+06C9 12014F            868                     LCALL DISP_MSG
+06CC E57C              869                     MOV A, SERIAL
+06CE 04                870                     INC A
+06CF 1202C4            871                     LCALL HEX_BCD
+06D2 120330            872                     LCALL DISP_2DIG_NO
+06D5 E57C              873                     MOV A, SERIAL
+06D7 04                874                     INC A
+06D8 F554              875                     MOV 54H, A
+06DA 7854              876                     MOV R0, #54H
+06DC 756601            877                     MOV COUNT9, #01H
+06DF 900000            878                     MOV DPTR, #00H
+06E2 AC7D              879                     MOV R4, MODE
+06E4 E553              880                     MOV A, TEMP_DAY
+06E6 BC0102            881                     CJNE R4, #01H, ADD_SOMETHING
+06E9 8002              882                     SJMP ADD_NOTHING_1
+                       883                     ADD_SOMETHING:
+06EB 2407              884                     ADD A, #07H
+                       885                     ADD_NOTHING_1:
+06ED F582              886                     MOV DPL, A
+06EF 12093B            887                     LCALL WRITE_DATA
+06F2 12034E            888                     LCALL DELAY_1SEC
+06F5 12034E            889                     LCALL DELAY_1SEC
+06F8 22                890                     RET
+                       891
+                       892
+                       893     ERROR_EDIT_BELL:
+06F9 7401              894             MOV A, #01H
+06FB 120162            895             LCALL CMD
+06FE 9001C0            896             MOV DPTR, #ERROR_MSG
+0701 12014F            897             LCALL DISP_MSG
+0704 12034E            898             LCALL DELAY_1SEC
+0707 12034E            899             LCALL DELAY_1SEC
+070A 22                900             RET
+                       901
+                       902     SAVE_BELL:
+070B 756603            903             MOV COUNT9, #03H
+070E 855254            904             MOV 54H, HOURS
+0711 855155            905             MOV 55H, MIN
+0714 856A56            906             MOV 56H, DURATION
+0717 7854              907             MOV R0, #54H
+0719 12093B            908             LCALL WRITE_DATA
+071C 22                909             RET
+                       910
+                       911     CONFIRM_BELL:
+071D 7401              912             MOV A, #01H
+071F 120162            913             LCALL CMD
+0722 9002B3            914             MOV DPTR, #CONFIRM
+0725 1202F5            915             LCALL DISPCH2
+0728 12015C            916             LCALL SECOND
+072B 12033C            917             LCALL DISP_TIME
+072E 7414              918             MOV A, #14H
+0730 120162            919             LCALL CMD
+0733 E553              920             MOV A, TEMP_DAY
+0735 120307            921             LCALL DISP_DAY
+0738 7414              922             MOV A, #14H
+073A 120162            923             LCALL CMD
+073D E56A              924             MOV A, DURATION
+073F 2430              925             ADD A, #30H
+0741 120322            926             LCALL DISP
+0744 9002C0            927             MOV DPTR, #SECONDS
+0747 1202F5            928             LCALL DISPCH2
+074A 22                929             RET
+                       930
+                       931     ;*************************************************************************************************
+                       932     ;This module is used to enter the duration Option
+                       933     ;Parameter:None
+                       934     ;Return: value of duration option in Acc
+                       935     ;DEPENDANCIES: CMD, KEYPD, SECOND, FIRST, DISPCH2
+                       936     ;*************************************************************************************************
+                       937     INPUT_DURATION:
+074B 7401              938             MOV A, #01H
+074D 120162            939             LCALL CMD
+0750 90029A            940             MOV DPTR, #EDIT_DURATION
+0753 1202F5            941             LCALL DISPCH2
+0756 12015C            942             LCALL SECOND
+0759 9002AB            943             MOV DPTR, #DURATION_MSG
+075C 1202F5            944             LCALL DISPCH2
+075F 740F              945             MOV A, #0FH
+0761 120162            946             LCALL CMD
+0764 12038D            947             LCALL KEYPD
+0767 120322            948             LCALL DISP
+076A B43005            949             CJNE A, #'0', CHECK_NEXT_OPTION_1
+076D 120799            950             LCALL ERROR_ENTRY
+0770 80D9              951             SJMP INPUT_DURATION
+                       952             CHECK_NEXT_OPTION_1:
+0772 B42A02            953             CJNE A, #'*' , CHECK_NEXT_OPTION_2
+0775 80D4              954             SJMP INPUT_DURATION
+                       955             CHECK_NEXT_OPTION_2:
+0777 B42305            956             CJNE A, #'#', CORRECT_ENTRY
+077A 120799            957             LCALL ERROR_ENTRY
+077D 80CC              958             SJMP INPUT_DURATION
+                       959             CORRECT_ENTRY:
+077F C3                960             CLR C
+0780 75F030            961             MOV B, #30H
+0783 95F0              962             SUBB A, B
+0785 C0E0              963             PUSH ACC
+                       964             WAIT_FOR_ENTER_KEY:
+0787 12038D            965                     LCALL KEYPD
+078A B42A04            966                     CJNE A, #2AH, N16
+078D D0E0              967                     POP ACC                 ;JUST TO FREE THE STACK MEM. WHILE LOOPING. IF NOT PRESENT ST
+078F 80BA              968                     JMP INPUT_DURATION
+                       969                     N16:
+0791 B423F3            970                     CJNE A, #23H, WAIT_FOR_ENTER_KEY
+0794 D0E0              971             POP ACC
+0796 F56A              972             MOV DURATION, A
+0798 22                973             RET
+                       974
+                       975     ERROR_ENTRY:
+0799 7401              976             MOV A, #01H
+079B 120162            977             LCALL CMD
+079E 9001C0            978             MOV DPTR, #ERROR_MSG
+07A1 12014F            979             LCALL DISP_MSG
+07A4 12034E            980             LCALL DELAY_1SEC
+07A7 22                981             RET
+                       982     ;*************************************************************************************************
+                       983     ;This module sets the time and day. PIN is required to set the time. If incorrect password is
+                       984     ;entered then user will again be asked to enter password and only reset breaks the loop
+                       985     ;Parameters:None
+                       986     ;Return:None(affects the RTC time)
+                       987     ;DEPENDANCIES: VER_PASSWORD, FIRST, SECOND, DISP_MSG, DISP_DAY, CMD, KEYPD, DISP, ERROR, ERROR_DAY
+                       988     ;                       DELAY_1SEC, READ_RTC
+                       989     ;*************************************************************************************************
+                       990
+                       991     SET_TIME:
+07A8 12048C            992             LCALL VER_PASSWORD              ;ENTER PASSWORD MODULE
+07AB 75F000            993             MOV B, #00H
+07AE 12086F            994             LCALL INPUT_HOUR_MINUTE         ;THIS FUNCTION PLACES THE VALUE OF READ NUMBER IN HOURS AND M
+07B1 756001            995             MOV ADD_LOWL, #01H
+07B4 855161            996             MOV DAVAVA, MIN
+07B7 120A53            997             LCALL WRITE_BYTE
+07BA 756002            998             MOV ADD_LOWL, #02H
+07BD 855261            999             MOV DAVAVA, HOURS
+07C0 120A53           1000             LCALL WRITE_BYTE                ;AFTER EXECUTION OF THIS MODULE RTC WILL BE SET
+                      1001             ;STARTING TO READ THE WEEK DAY
+07C3 1207FA           1002             LCALL INPUT_DAY                 ;day value will be present in acc.
+07C6 756003           1003             MOV ADD_LOWL, #03H              ;starting to send the data to RTC
+07C9 F561             1004             MOV DAVAVA, A
+07CB 120A53           1005             LCALL WRITE_BYTE                ;write the data to RTC
+                      1006
+07CE 7401             1007             MOV A, #01H
+07D0 120162           1008             LCALL CMD
+07D3 900208           1009             MOV DPTR, #MESSAGE5
+07D6 12014F           1010             LCALL DISP_MSG
+07D9 12015C           1011             LCALL SECOND
+07DC 120ACE           1012             LCALL READ_RTC
+07DF C001             1013             PUSH 01H
+07E1 7903             1014             MOV R1, #03H
+07E3 7414             1015             MOV A, #14H
+                      1016             LOOP7:
+07E5 120162           1017             LCALL CMD
+07E8 D9FB             1018             DJNZ R1, LOOP7
+07EA D001             1019             POP 01H
+07EC 12033C           1020             LCALL DISP_TIME
+07EF 7420             1021             MOV A, #20H
+07F1 120322           1022             LCALL DISP
+07F4 E567             1023             MOV A, DAY
+07F6 120307           1024             LCALL DISP_DAY                  ;while calling the DISP_DAY module make sure that
+                      1025
+07F9 22               1026             RET
+                      1027
+                      1028     ;*************************************************************************************************
+                      1029     ;This module takes input from user to enter the day in number from 1-7 and also displays the 3
+                      1030     ;lettered corresponding day beside it
+                      1031     ;Parameter:None
+                      1032     ;Return:day value in Acc
+                      1033     ;DEPENDANCIES:DISP_MSG, SECOND, CMD, ERROR_DAY, KEYPD, DISP_DAY
+                      1034     ;*************************************************************************************************
+                      1035     INPUT_DAY:
+07FA 7401             1036             MOV A, #1H                              ;CLEARING THE SCREEN TO BEGIN FRESH
+07FC 120162           1037             LCALL CMD
+07FF 9001B3           1038             MOV DPTR, #MESSAGE3
+0802 12014F           1039             LCALL DISP_MSG
+0805 12015C           1040             LCALL SECOND                    ;BRINGING THE CURSOR TO SECOND LINE FIRST POSITION
+0808 120162           1041             LCALL CMD
+080B 740F             1042             MOV A, #0FH                     ;TURNING ON THE CURSOR
+080D 120162           1043             LCALL CMD
+0810 7805             1044             MOV R0, #5H                     ;SHIFTING THE CURSOR TO THE MIDDLE
+0812 7414             1045             MOV A, #14H
+                      1046             LOOP6:
+0814 120162           1047             LCALL CMD
+0817 D8FB             1048             DJNZ R0, LOOP6
+0819 12038D           1049             LCALL KEYPD                             ;READ A CHARACTER
+081C 120322           1050             LCALL DISP
+081F B42302           1051             CJNE A, #23H, N10               ;COMPARING THE VALUE OF KEY WITH #
+0822 8035             1052             SJMP ERROR_DAY
+                      1053             N10:
+0824 B42A02           1054             CJNE A, #2AH, N11               ;COMPARING THE VALUE OF KEY WITH *
+0827 8030             1055             SJMP ERROR_DAY
+                      1056             N11:
+0829 B43002           1057             CJNE A, #30H, N12               ;COMPARING THE VALUE OF KEY WITH 0 AS VALID CHARACTERS ARE ON
+082C 802B             1058             SJMP ERROR_DAY
+                      1059             N12:
+082E F9               1060             MOV R1,A                                ;SAVING THE VALUE OF A
+082F C001             1061             PUSH 01H                                ;THE DISP_DAY FUNCTION WIHICH WE WILL USE LATER WILL
+0831 C3               1062             CLR C                                   ;... SO WE HAVE TO USE PUSH TO SAVE R1
+0832 9438             1063             SUBB A, #38H                    ;ERROR CHECKING BY CHECKING IF THE ANSWER COMES OUT NEGATIVE
+0834 5023             1064             JNC ERROR_DAY                   ;EX: INPUT IS 37H(VALID) SO 37H-38H=-1H HENCE C=1. HENCE VALI
+0836 C3               1065             CLR C                                   ;EX: IF INPUT IS 39H(INVALID) SO ASNWER IS 1H AND C=0
+0837 7414             1066             MOV A, #14H                             ;SHIFTING RIGHT CURSOR TO GIVE SPACE
+0839 120162           1067             LCALL CMD
+083C E9               1068             MOV A,R1                                ;RESTORING THE VALUE OF A
+083D 9430             1069             SUBB A, #30H                    ;GETTING ACTUAL VALUE FROM ASCII VALUE
+083F 120307           1070             LCALL DISP_DAY                  ;DISPLAYING THE DAY AS SOON AS WE PRESS THE KEY
+0842 740C             1071             MOV A, #0CH
+0844 120162           1072             LCALL CMD
+                      1073             LOOP3:                                  ;THIS LOOP IS FOR USER TO ENTER 'ENTER KEY'
+0847 12038D           1074             LCALL KEYPD                             ;INPUTTING THE ENTER KEY OR CLEAR KEY
+084A B42A02           1075             CJNE A, #2AH, N13               ;IF USER ENTERS * WHOLE SCREEN IS RESET
+084D 80AB             1076             JMP INPUT_DAY
+                      1077             N13:
+084F B423F5           1078             CJNE A, #23H, LOOP3     ;IF USER ENTERS # IT IS CONSIDERED AS 'ENTER KEY'
+0852 D001             1079             POP 01H                                 ;01H STANDS FOR R1
+0854 E9               1080             MOV A, R1
+0855 C3               1081             CLR C
+0856 9430             1082             SUBB A, #30H                    ;USE THIS VALUE OF DAY
+0858 22               1083             RET
+                      1084
+                      1085     ERROR_DAY:
+0859 120156           1086             LCALL FIRST                     ;MOVING THE CURSOR TO FIRST LINE AS THE ERROR HAS TO BE PRINT
+085C 740C             1087             MOV A, #0CH                     ;TURNING OFF THE CURSOR
+085E 120162           1088             LCALL CMD
+0861 9001C0           1089             MOV DPTR, #ERROR_MSG
+0864 12014F           1090             LCALL DISP_MSG
+0867 12034E           1091             LCALL DELAY_1SEC
+086A 12034E           1092             LCALL DELAY_1SEC
+086D 808B             1093             JMP INPUT_DAY
+                      1094
+                      1095     ;*************************************************************************************************
+                      1096     ;This module is used to read hour and minute from the keypad. calling function must specify whether
+                      1097     ;it is set_time or set_bell by passing value on register B.
+                      1098     ;Parameter:B -> 0H if SET_TIME B->01h if SET_BELL
+                      1099     ;Return: value will be placed in HOURS AND MIN
+                      1100     ;DEPENDANCIES:DISP, DISPCH2, DISP_MSG, CMD, FIRST, SECOND, KEYPD
+                      1101     ;*************************************************************************************************
+                      1102     INPUT_HOUR_MINUTE:
+086F 7401             1103             MOV A, #01H
+0871 120162           1104             LCALL CMD
+0874 7401             1105             MOV A, #01H
+0876 C3               1106             CLR C
+0877 95F0             1107             SUBB A, B
+0879 6005             1108             JZ ITS_BELL
+087B 90019D           1109             MOV DPTR, #MESSAGE1
+087E 8003             1110             SJMP NEXT
+                      1111             ITS_BELL:
+0880 90028B           1112             MOV DPTR, #NEW_BELL_MSG
+                      1113             NEXT:
+0883 12014F           1114             LCALL DISP_MSG
+0886 12015C           1115             LCALL SECOND                    ;MOVING CURSOR TO SECOND LINE
+0889 9001A8           1116             MOV DPTR, #MESSAGE2
+088C 12014F           1117             LCALL DISP_MSG
+088F 12015C           1118             LCALL SECOND
+0892 740F             1119             MOV A, #0FH                     ;TURNING ON THE CURSOR
+0894 120162           1120             LCALL CMD
+0897 7905             1121             MOV R1, #5H                     ;SHIFTING CURSOR 5 TIMES
+0899 7414             1122             LOOP1: MOV A, #14H
+089B 120162           1123                     LCALL CMD
+089E D9F9             1124             DJNZ R1, LOOP1
+                      1125             ;STARTING TO READ THE VALUE OF HOUR
+08A0 12038D           1126             LCALL KEYPD
+08A3 120322           1127             LCALL DISP
+08A6 B42302           1128             CJNE A, #23H, N1                ;COMPARING THE VALUE OF KEY WITH #
+08A9 8037             1129             SJMP ERROR
+                      1130             N1:
+08AB B42A03           1131             CJNE A, #2AH, N2                ;COMPARING THE VALUE OF KEY WITH *
+08AE 02086F           1132             LJMP INPUT_HOUR_MINUTE
+                      1133             N2:
+08B1 F9               1134             MOV R1,A
+08B2 C3               1135             CLR C
+08B3 9433             1136             SUBB A, #33H                    ;i.e., IF ENTERED NUMBER IS GREATER THAN 2(EXAMPLE IS 30 HOUR
+08B5 502B             1137             JNC ERROR
+08B7 C3               1138             CLR C
+08B8 E9               1139             MOV A, R1
+08B9 9430             1140             SUBB A, #30H                    ;ASCII ADJUSTMENTS
+08BB C4               1141             SWAP A                                  ;EX: 31H-30H=01H AFTER SWAPPING IT WILL BE 10H
+08BC F9               1142             MOV R1, A                               ;SAVING THE VALUE OF A
+08BD 12038D           1143             LCALL KEYPD
+08C0 120322           1144             LCALL DISP
+08C3 B42303           1145             CJNE A, #23H, N3                ;COMPARING THE VALUE OF KEY WITH #
+08C6 0208E2           1146             JMP ERROR
+                      1147             N3:
+08C9 B42A03           1148             CJNE A, #2AH, N4                ;COMPARING THE VALUE OF KEY WITH *
+08CC 02086F           1149             JMP INPUT_HOUR_MINUTE
+                      1150             N4:
+08CF C3               1151             CLR C
+08D0 9430             1152             SUBB A, #30H                    ;ADJUSTMENTS
+08D2 29               1153             ADD A,R1                                ;EXAMPLE CONTINUED: NOW PREVIOUS 10H IS ADDED WITH LE
+08D3 F9               1154             MOV R1,A                                ;AGAIN SAVING
+08D4 C3               1155             CLR C
+08D5 9425             1156             SUBB A,#25H                             ;CHECKING IF THE HOUR VALUE IS GRATER THAN 24
+08D7 5009             1157             JNC ERROR
+08D9 7414             1158             MOV A, #14H                             ;SHIFT CURSOR RIGHT ONCE TO AVOID THE COLON
+08DB 120162           1159             LCALL CMD
+08DE 8952             1160             MOV HOURS, R1
+08E0 8012             1161             SJMP READ_MINUTES
+                      1162
+                      1163             ;START OF ERROR HANDLING
+                      1164             ERROR:
+08E2 120156           1165                     LCALL FIRST
+08E5 9001C0           1166                     MOV DPTR, #ERROR_MSG
+08E8 12014F           1167                     LCALL DISP_MSG
+08EB 12034E           1168                     LCALL DELAY_1SEC
+08EE 12034E           1169                     LCALL DELAY_1SEC
+08F1 02086F           1170                     LJMP INPUT_HOUR_MINUTE
+                      1171
+                      1172             ;STARTING TO READ THE MINUTES
+                      1173             READ_MINUTES:
+08F4 12038D           1174             LCALL KEYPD
+08F7 120322           1175             LCALL DISP
+08FA B42302           1176             CJNE A, #23H, N5                ;COMPARING THE VALUE OF KEY WITH #
+08FD 80E3             1177             SJMP ERROR
+                      1178             N5:
+08FF B42A03           1179             CJNE A, #2AH, N6                ;COMPARING THE VALUE OF KEY WITH *
+0902 02086F           1180             LJMP INPUT_HOUR_MINUTE
+                      1181             N6:
+0905 F8               1182             MOV R0,A
+0906 C3               1183             CLR C
+0907 9436             1184             SUBB A, #36H                    ;i.e., IF ENTERED NUMBER IS GREATER THAN 5(EXAMPLE IS 60 MINU
+0909 50D7             1185             JNC ERROR
+090B E8               1186             MOV A, R0
+090C C3               1187             CLR C
+090D 9430             1188             SUBB A, #30H                    ;AGAIN SAME PROCEDURES AS DONE WITH HOURS
+090F C4               1189             SWAP A
+0910 F8               1190             MOV R0, A
+0911 12038D           1191             LCALL KEYPD
+0914 120322           1192             LCALL DISP
+0917 B42302           1193             CJNE A, #23H, N7                ;COMPARING THE VALUE OF KEY WITH #
+091A 80C6             1194             SJMP ERROR
+                      1195             N7:
+091C B42A03           1196             CJNE A, #2AH, N8                ;COMPARING THE VALUE OF KEY WITH *
+091F 02086F           1197             LJMP INPUT_HOUR_MINUTE
+                      1198             N8:
+0922 C3               1199             CLR C
+0923 9430             1200             SUBB A, #30H
+0925 28               1201             ADD A, R0
+0926 F8               1202             MOV R0,A
+0927 740C             1203             MOV A, #0CH                     ;TURNING OFF THE CURSOR
+0929 120162           1204             LCALL CMD
+                      1205             LOOP2:
+092C 12038D           1206                     LCALL KEYPD
+092F B42A03           1207                     CJNE A, #2AH, N9
+0932 02086F           1208                     LJMP INPUT_HOUR_MINUTE
+                      1209                     N9:
+0935 B423F4           1210                     CJNE A, #23H, LOOP2
+0938 8851             1211             MOV MIN, R0
+093A 22               1212             RET
+                      1213
+                      1214
+                      1215
+                      1216     ;*************************************************************************************************
+                      1217     ;This module is used to write data to EEPROM. User has to pass the starting address of the data
+                      1218     ;through the R0 register, location on the EEPROM through the DPTR and the count of the data through
+                      1219     ;COUNT9. Rest everything is handled by this module
+                      1220     ;Parameters: DPTR, R0, COUNT9
+                      1221     ;DEPENDANCIES:EEPROM_START, EEPROM_DELAY, SEND_DATA, EEPROM_STOP
+                      1222     ;*************************************************************************************************
+                      1223     WRITE_DATA:
+093B 1209B3           1224             CALL EEPROM_START
+093E 74A0             1225             MOV A,#0A0H
+0940 1209F1           1226             CALL SEND_DATA
+0943 E582             1227             MOV A,DPL                       ;LOCATION ADDRESS
+0945 1209F1           1228             CALL SEND_DATA
+0948 E583             1229             MOV A,DPH                       ;LOCATION ADDRESS
+094A 1209F1           1230             CALL SEND_DATA
+094D 8664             1231             MOV EEPROM_DATA,@R0
+094F E564             1232             MOV A,EEPROM_DATA       ;DATA TO BE SEND
+0951 1209F1           1233             CALL SEND_DATA
+0954 1209D2           1234             CALL EEPROM_STOP
+0957 120A3A           1235             LCALL EEPROM_DELAY
+095A 120A3A           1236             LCALL EEPROM_DELAY
+095D 1209B3           1237             CALL EEPROM_START
+0960 74A0             1238             MOV A,#0A0H
+0962 1209F1           1239             CALL SEND_DATA
+0965 E582             1240             MOV A,DPL                        ;LOCATION ADDRESS
+0967 1209F1           1241             CALL SEND_DATA
+096A E583             1242             MOV A,DPH                        ;LOCATION ADDRESS
+096C 1209F1           1243             CALL SEND_DATA
+096F 8664             1244             MOV EEPROM_DATA,@R0
+0971 E564             1245             MOV A,EEPROM_DATA        ;DATA TO BE SEND
+0973 1209F1           1246             CALL SEND_DATA
+0976 1209D2           1247             CALL EEPROM_STOP
+0979 120A3A           1248             LCALL   EEPROM_DELAY
+097C 120A3A           1249             LCALL   EEPROM_DELAY
+097F A3               1250             INC DPTR
+0980 08               1251             INC R0
+0981 D566B7           1252             DJNZ COUNT9,WRITE_DATA
+0984 22               1253             RET
+                      1254
+                      1255     ;*************************************************************************************************
+                      1256     ;This module is used to read the data from EEPROM. Location on the EEPROM is passed through the
+                      1257     ;DPTR and data is returned to the RAM in the location determined by the R1 and number of bytes read
+                      1258     ;is determined by the COUNT9
+                      1259     ;Parameters:COUNT9, DPTR, R1
+                      1260     ;Return:data on RAM location pointed by R1
+                      1261     ;DEPENDANCIES:EEPROM_START, EEPROM_DELAY,SEND_DATA, EEPROM_STOP
+                      1262     ;*************************************************************************************************
+                      1263     READ_DATA:
+0985 1209B3           1264             CALL EEPROM_START
+0988 74A0             1265             MOV A,#0A0H
+098A 1209F1           1266             CALL SEND_DATA
+098D E582             1267             MOV A,DPL                        ;LOCATION ADDRESS
+098F 1209F1           1268             CALL SEND_DATA
+0992 E583             1269             MOV A,DPH                        ;LOCATION ADDRESS
+0994 1209F1           1270             CALL SEND_DATA
+0997 1209B3           1271             CALL EEPROM_START
+099A 74A1             1272             MOV A,#0A1H
+099C 1209F1           1273             CALL SEND_DATA
+099F 120A13           1274             CALL GET_DATA
+09A2 1209D2           1275             CALL EEPROM_STOP
+09A5 120A3A           1276             LCALL   EEPROM_DELAY
+09A8 120A3A           1277             LCALL   EEPROM_DELAY
+09AB A3               1278             INC DPTR
+09AC A73C             1279             MOV @R1,3CH                              ; STORE
+09AE 09               1280             INC R1
+09AF D566D3           1281             DJNZ COUNT9,READ_DATA
+09B2 22               1282             RET
+                      1283
+                      1284     ;*************************************************************************************************
+                      1285     ;This module is used to initialize the eeprom line
+                      1286     ;start bit is high to low transition on the sda while the scl is high
+                      1287     ;hence the flow of the module is
+                      1288     ;high sda -- high scl -- hold the scl high -- make sda low -- hold scl high --  make scl low
+                      1289     ;Parameters:None
+                      1290     ;Return:None
+                      1291     ;DEPENDANCIES:None
+                      1292     ;*************************************************************************************************
+                      1293
+                      1294     EEPROM_START:
+09B3 D2A1             1295             SETB SDA
+09B5 00               1296             NOP
+09B6 00               1297             NOP
+09B7 00               1298             NOP
+09B8 00               1299             NOP
+09B9 00               1300             NOP
+09BA 00               1301             NOP
+09BB 00               1302             NOP
+09BC D2A0             1303             SETB SCL
+09BE 00               1304             NOP
+09BF 00               1305             NOP
+09C0 00               1306             NOP
+09C1 00               1307             NOP
+09C2 00               1308             NOP
+09C3 00               1309             NOP
+09C4 00               1310             NOP
+09C5 00               1311             NOP
+09C6 C2A1             1312             CLR SDA
+09C8 00               1313             NOP
+09C9 00               1314             NOP
+09CA 00               1315             NOP
+09CB 00               1316             NOP
+09CC 00               1317             NOP
+09CD 00               1318             NOP
+09CE 00               1319             NOP
+09CF C2A0             1320             CLR SCL
+09D1 22               1321             RET
+                      1322
+                      1323     ;*************************************************************************************************
+                      1324     ;This module is used to mark stop of EEPROM data flow
+                      1325     ;stop bit is low to high transition on SDA while SCL is maintained high
+                      1326     ;Parameters:None
+                      1327     ;Return:None
+                      1328     ;DEPENDANCIES:None
+                      1329     ;*************************************************************************************************
+                      1330     EEPROM_STOP:
+09D2 C2A1             1331             CLR SDA
+09D4 00               1332             NOP
+09D5 00               1333             NOP
+09D6 00               1334             NOP
+09D7 00               1335             NOP
+09D8 00               1336             NOP
+09D9 00               1337             NOP
+09DA 00               1338             NOP
+09DB D2A0             1339             SETB SCL
+09DD 00               1340             NOP
+09DE 00               1341             NOP
+09DF 00               1342             NOP
+09E0 00               1343             NOP
+09E1 00               1344             NOP
+09E2 00               1345             NOP
+09E3 00               1346             NOP
+09E4 00               1347             NOP
+09E5 D2A1             1348             SETB SDA
+09E7 00               1349             NOP
+09E8 00               1350             NOP
+09E9 00               1351             NOP
+09EA 00               1352             NOP
+09EB 00               1353             NOP
+09EC 00               1354             NOP
+09ED 00               1355             NOP
+09EE C2A0             1356             CLR SCL
+09F0 22               1357             RET
+                      1358
+                      1359     ;*************************************************************************************************
+                      1360     ;This module sends the data to the EEPROM through Acc.
+                      1361     ;this module rotates left the data through carry and puts the carry to the SDA pin
+                      1362     ;Parameters:Acc
+                      1363     ;Return:None(writes data onto EEPROM)
+                      1364     ;DEPENDANCIES:EEPROM_DELAY, CLOCK
+                      1365     ;*************************************************************************************************
+                      1366     SEND_DATA:
+09F1 7F00             1367             MOV R7,#00H
+                      1368             SEND:
+09F3 33               1369                     RLC A
+09F4 92A1             1370                     MOV SDA,C
+09F6 120A2D           1371                     CALL CLOCK
+09F9 0F               1372                     INC R7
+09FA BF08F6           1373                     CJNE R7,#08,SEND
+09FD D2A1             1374             SETB  SDA
+09FF 00               1375             NOP
+0A00 00               1376             NOP
+0A01 00               1377             NOP
+0A02 00               1378             NOP
+0A03 00               1379             NOP
+0A04 00               1380             NOP
+0A05 D2A0             1381             SETB SCL
+0A07 20A1FD           1382             JB SDA,$
+0A0A 120A3A           1383             CALL EEPROM_DELAY
+0A0D C2A0             1384             CLR SCL
+0A0F 120A3A           1385             CALL EEPROM_DELAY
+0A12 22               1386             RET
+                      1387
+                      1388     ;*************************************************************************************************
+                      1389     ;This module reads the data from the EEPROM into the RAM location 3CH
+                      1390     ;Parameters: None
+                      1391     ;Return: data in 3CH
+                      1392     ;DEPENDANCIES:CLOCK
+                      1393     ;*************************************************************************************************
+                      1394     GET_DATA:
+0A13 D2A1             1395             SETB SDA
+0A15 7F00             1396             MOV R7,#00H
+0A17 E4               1397             CLR A
+                      1398             GET:
+0A18 D2A0             1399                     SETB SCL
+0A1A 00               1400                     NOP
+0A1B 00               1401                     NOP
+0A1C A2A1             1402                     MOV C,SDA
+0A1E 33               1403                     RLC A
+0A1F C2A0             1404                     CLR SCL
+0A21 0F               1405                     INC R7
+0A22 BF08F3           1406                     CJNE R7,#08,GET
+0A25 D2A1             1407             SETB SDA
+0A27 120A2D           1408             CALL CLOCK
+0A2A F53C             1409             MOV 3CH,A
+0A2C 22               1410             RET
+                      1411
+                      1412
+                      1413     ;*************************************************************************************************
+                      1414     ;This module generates clock for EEPROM communication
+                      1415     ;Parameters:None
+                      1416     ;Return:None
+                      1417     ;DEPENDANCIES:None
+                      1418     ;*************************************************************************************************
+                      1419     CLOCK:
+0A2D D2A0             1420             SETB SCL
+0A2F 00               1421             NOP
+0A30 00               1422             NOP
+0A31 00               1423             NOP
+0A32 00               1424             NOP
+0A33 00               1425             NOP
+0A34 00               1426             NOP
+0A35 00               1427             NOP
+0A36 00               1428             NOP
+0A37 C2A0             1429             CLR SCL
+0A39 22               1430             RET
+                      1431
+                      1432     ;*************************************************************************************************
+                      1433     ;This module generates a delay of 3ms
+                      1434     ;Parameters:None
+                      1435     ;Return:None
+                      1436     ;DEPENDANCIES:None
+                      1437     ;*************************************************************************************************
+                      1438     EEPROM_DELAY:
+0A3A 75330B           1439             MOV 33H,#11      ;DELAY OF 3 MSEC
+                      1440             EEPROM_DELAY_1:
+0A3D 7532FF           1441                     MOV 32H,#0FFH
+0A40 D532FD           1442                     DJNZ 32H,$
+0A43 D533F7           1443                     DJNZ 33H,EEPROM_DELAY_1
+0A46 22               1444                     RET
+                      1445
+                      1446     ;*************************************************************************************************
+                      1447     ;This module reads the stored PIN from EEPROM and loads it to RAM location 54H
+                      1448     ;Parameters:None
+                      1449     ;Return:PIN on RAM location 0x54
+                      1450     ;DEPENDANCIES:READ_DATA
+                      1451     ;*************************************************************************************************
+                      1452     READ_PASSWORD:
+0A47 7954             1453             MOV R1, #54H
+0A49 907001           1454             MOV DPTR, #7001H
+0A4C 756604           1455             MOV COUNT9, #4H
+0A4F 120985           1456             LCALL READ_DATA
+0A52 22               1457             RET
+                      1458
+                      1459     ;*************************************************************************************************
+                      1460     ;This module writes the values to RTC
+                      1461     ;Parameters: data to be loaded in DAVAVA, address of register in ADD_LOWL
+                      1462     ;Return:None
+                      1463     ;DEPENDANCIES:LOOP_BYTE
+                      1464     ;*************************************************************************************************
+                      1465     WRITE_BYTE:
+0A53 C2A1             1466             CLR     SDA                   ;start bit
+0A55 C2A0             1467             CLR     SCL
+0A57 74D0             1468             MOV     A,#CONT_BYTE_W        ;send control byte
+0A59 120AFF           1469             LCALL   LOOP_BYTE
+0A5C D2A1             1470             SETB    SDA
+0A5E D2A0             1471             SETB    SCL
+0A60 B2B0             1472             CPL             0B0H
+0A62 20A1EE           1473             JB      SDA,WRITE_BYTE        ;loop until busy
+0A65 C2A0             1474             CLR     SCL
+0A67 E560             1475             MOV     A,ADD_LOWL             ;send address low
+0A69 120AFF           1476             LCALL   LOOP_BYTE
+0A6C D2A1             1477             SETB    SDA
+0A6E D2A0             1478             SETB    SCL
+0A70 20A1E0           1479             JB      SDA,WRITE_BYTE        ;loop until busy
+0A73 C2A0             1480             CLR     SCL
+0A75 E561             1481             MOV     A,DAVAVA                ;send DAVAVA
+0A77 120AFF           1482             LCALL   LOOP_BYTE
+0A7A D2A1             1483             SETB    SDA
+0A7C D2A0             1484             SETB    SCL
+0A7E 20A1D2           1485             JB      SDA,WRITE_BYTE        ;loop until busy
+0A81 C2A1             1486             CLR     SDA
+0A83 C2A0             1487             CLR     SCL
+0A85 D2A0             1488             SETB    SCL                   ;stop bit
+0A87 D2A1             1489             SETB    SDA
+0A89 22               1490             RET
+                      1491
+                      1492
+                      1493     ;*************************************************************************************************
+                      1494     ;This module will read a single Parameter from the RTC.
+                      1495     ;Parameters: ADD_LOWL must contain the address of required register
+                      1496     ;OUTPUT:DAVAVA will contain the data
+                      1497     ;DEPENDANCIES:LOOP_BYTE, LOOP_READ
+                      1498     ;*************************************************************************************************
+                      1499     READ_BYTE:
+0A8A C2A1             1500             CLR     SDA                   ;start bit
+0A8C C2A0             1501             CLR     SCL
+0A8E 74D0             1502             MOV     A,#CONT_BYTE_W        ;send control byte
+0A90 120AFF           1503             LCALL   LOOP_BYTE
+0A93 D2A1             1504             SETB    SDA
+0A95 D2A0             1505             SETB    SCL
+0A97 20A1F0           1506             JB      SDA,READ_BYTE         ;loop until busy
+0A9A C2A0             1507             CLR     SCL
+0A9C E560             1508             MOV     A,ADD_LOWL             ;send address low
+0A9E 120AFF           1509             LCALL   LOOP_BYTE
+0AA1 D2A1             1510             SETB    SDA
+0AA3 D2A0             1511             SETB    SCL
+0AA5 20A1E2           1512             JB      SDA,READ_BYTE         ;loop until busy
+0AA8 C2A0             1513             CLR     SCL
+                      1514
+0AAA D2A0             1515             SETB    SCL
+0AAC D2A1             1516             SETB    SDA
+0AAE C2A1             1517             CLR     SDA                   ;start bit
+0AB0 C2A0             1518             CLR     SCL
+0AB2 74D1             1519             MOV     A,#CONT_BYTE_R        ;send control byte
+0AB4 120AFF           1520             LCALL   LOOP_BYTE
+0AB7 D2A1             1521             SETB    SDA
+0AB9 D2A0             1522             SETB    SCL
+0ABB 20A1CC           1523             JB      SDA,READ_BYTE         ;loop until busy
+0ABE C2A0             1524             CLR     SCL
+0AC0 120B0F           1525             LCALL   LOOP_READ
+0AC3 D2A1             1526             SETB    SDA
+0AC5 D2A0             1527             SETB    SCL
+0AC7 C2A0             1528             CLR     SCL
+                      1529
+0AC9 D2A0             1530             SETB    SCL                   ;stop bit
+0ACB D2A1             1531             SETB    SDA
+0ACD 22               1532             RET
+                      1533
+                      1534     ;*************************************************************************************************
+                      1535     ;This module reads all the Parameters of the RTC by calling other functions
+                      1536     ;Parameters:None
+                      1537     ;Return:MIN, HOURS, DAY
+                      1538     ;DEPENDANCIES:READ_BYTE, I2C_STOP
+                      1539     ;*************************************************************************************************
+                      1540     READ_RTC:
+0ACE 756000           1541             MOV     ADD_LOWL,#00h
+0AD1 120A8A           1542             LCALL   READ_BYTE
+0AD4 856150           1543             MOV     SEC,DAVAVA
+0AD7 120B21           1544             LCALL   I2C_STOP
+0ADA 756001           1545             MOV     ADD_LOWL,#01h
+0ADD 120A8A           1546             LCALL   READ_BYTE
+0AE0 856151           1547             MOV     MIN,DAVAVA
+0AE3 120B21           1548             LCALL   I2C_STOP
+0AE6 756002           1549             MOV     ADD_LOWL,#02h
+0AE9 120A8A           1550             LCALL   READ_BYTE
+0AEC 856152           1551             MOV     HOURS,DAVAVA
+0AEF 120B21           1552             LCALL   I2C_STOP
+0AF2 756003           1553             MOV     ADD_LOWL,#03h
+0AF5 120A8A           1554             LCALL   READ_BYTE
+0AF8 856167           1555             MOV     DAY,DAVAVA
+0AFB 120B21           1556             LCALL   I2C_STOP
+0AFE 22               1557         RET
+                      1558
+                      1559     ;*************************************************************************************************
+                      1560     ;This module writes the content of DAVAVA to the RTC one bit at a time
+                      1561     ;Parameters:DAVAVA
+                      1562     ;Return:None but RTC will br set
+                      1563     ;DEPENDANCIES:None
+                      1564     ;*************************************************************************************************
+                      1565     LOOP_BYTE:
+0AFF C002             1566             PUSH    02H
+0B01 7A08             1567             MOV     R2,#08H
+                      1568             LOOP_SEND:
+0B03 33               1569                     RLC     A
+0B04 92A1             1570                     MOV     SDA,C
+0B06 D2A0             1571                     SETB    SCL
+0B08 C2A0             1572                     CLR     SCL
+0B0A DAF7             1573                     DJNZ    R2,LOOP_SEND
+0B0C D002             1574             POP     02H
+0B0E 22               1575             RET
+                      1576     ;*************************************************************************************************
+                      1577     ;This module reads the value passed by the RTC via SDA and places it in DAVAVA
+                      1578     ;Parameters:None passed but output depends on the value passed through the SDA before calling this
+                      1579     ;OUTPUT: value on DAVAVA
+                      1580     ;DEPENDANCIES:None
+                      1581     ;*************************************************************************************************
+                      1582
+                      1583     LOOP_READ:
+0B0F C002             1584             PUSH   02H
+0B11 7A08             1585         MOV    R2,#08H
+                      1586             LOOP_READ1:
+0B13 D2A0             1587                     SETB   SCL
+0B15 A2A1             1588                     MOV    C,SDA
+0B17 C2A0             1589                     CLR    SCL
+0B19 33               1590                     RLC    A
+0B1A DAF7             1591                     DJNZ   R2,LOOP_READ1
+0B1C F561             1592             MOV    DAVAVA,A
+0B1E D002             1593             POP    02H
+0B20 22               1594             RET
+                      1595
+                      1596
+                      1597     I2C_Stop:
+0B21 C2A1             1598             CLR       SDA
+0B23 D2A0             1599             SETB      SCL
+0B25 00               1600             NOP
+0B26 D2A1             1601             SETB      SDA
+0B28 22               1602             RET
+                      1603
+                      1604
+                      1605
+                      1606
+                      1607     CREATE_DATA:
+0B29 756604           1608             MOV COUNT9, #04H
+0B2C 9001E7           1609             MOV DPTR,#PASSWORD
+0B2F 7854             1610             MOV R0,#54H
+                      1611             UP2:
+0B31 E4               1612             CLR A
+0B32 93               1613             MOVC A, @A+DPTR
+0B33 F6               1614             MOV @R0, A
+0B34 08               1615             INC R0
+0B35 A3               1616             INC DPTR
+0B36 D566F8           1617             DJNZ COUNT9, UP2
+0B39 907001           1618             MOV DPTR, #07001H
+0B3C 7854             1619             MOV R0, #54H
+0B3E 756604           1620             MOV COUNT9, #04H
+0B41 12093B           1621             LCALL WRITE_DATA
+0B44 22               1622             RET
+                      1623
+                      1624
+                      1625     END
+ASSEMBLY COMPLETE, NO ERRORS FOUND, NO WARNINGS
+
+
+SYMBOL TABLE:
+??MCU_8051_IDE . . . . . . . . . . .  N  NUMB  8051H  NOT USED
+??VERSION. . . . . . . . . . . . . .  N  NUMB  0149H  NOT USED
+AC . . . . . . . . . . . . . . . . .  B  ADDR  00D6H  NOT USED
+ACC. . . . . . . . . . . . . . . . .  D  ADDR  00E0H
+ACSR . . . . . . . . . . . . . . . .  D  ADDR  0097H  NOT USED
+ADCF . . . . . . . . . . . . . . . .  D  ADDR  00F6H  NOT USED
+ADCLK. . . . . . . . . . . . . . . .  D  ADDR  00F2H  NOT USED
+ADCON. . . . . . . . . . . . . . . .  D  ADDR  00F3H  NOT USED
+ADDH . . . . . . . . . . . . . . . .  D  ADDR  00F5H  NOT USED
+ADDL . . . . . . . . . . . . . . . .  D  ADDR  00F4H  NOT USED
+ADD_LOWL . . . . . . . . . . . . . .  N  NUMB  0060H
+ADD_NOTHING. . . . . . . . . . . . .  C  ADDR  0681H
+ADD_NOTHING_1. . . . . . . . . . . .  C  ADDR  06EDH
+ADD_NOTHING__. . . . . . . . . . . .  C  ADDR  0418H
+ADD_NOTHING__1 . . . . . . . . . . .  C  ADDR  042EH
+ADD_SOMETHING. . . . . . . . . . . .  C  ADDR  06EBH
+AUTH_FAIL. . . . . . . . . . . . . .  C  ADDR  04D0H
+AUTH_FAIL_MSG. . . . . . . . . . . .  C  ADDR  0217H
+AUTH_MSG . . . . . . . . . . . . . .  C  ADDR  01F8H
+AUXR . . . . . . . . . . . . . . . .  D  ADDR  008EH  NOT USED
+AUXR1. . . . . . . . . . . . . . . .  D  ADDR  00A2H  NOT USED
+B. . . . . . . . . . . . . . . . . .  D  ADDR  00F0H
+BCD_HEX. . . . . . . . . . . . . . .  C  ADDR  02D5H
+BDRCON . . . . . . . . . . . . . . .  D  ADDR  009BH  NOT USED
+BDRCON_1 . . . . . . . . . . . . . .  D  ADDR  009CH  NOT USED
+BEGIN. . . . . . . . . . . . . . . .  C  ADDR  0100H
+BELL_ACK_1 . . . . . . . . . . . . .  C  ADDR  026EH
+BELL_DURATION. . . . . . . . . . . .  N  NUMB  0064H
+BELL_HOUR. . . . . . . . . . . . . .  N  NUMB  0062H
+BELL_KEY . . . . . . . . . . . . . .  N  NUMB  00B4H
+BELL_MESSAGE . . . . . . . . . . . .  C  ADDR  0234H
+BELL_MIN . . . . . . . . . . . . . .  N  NUMB  0063H
+BELL_NUMBER_MSG. . . . . . . . . . .  C  ADDR  0251H
+BELL_OPTIONS . . . . . . . . . . . .  C  ADDR  0243H
+BRL. . . . . . . . . . . . . . . . .  D  ADDR  009AH  NOT USED
+CCAP0H . . . . . . . . . . . . . . .  D  ADDR  00FAH  NOT USED
+CCAP0L . . . . . . . . . . . . . . .  D  ADDR  00EAH  NOT USED
+CCAP1H . . . . . . . . . . . . . . .  D  ADDR  00FBH  NOT USED
+CCAP1L . . . . . . . . . . . . . . .  D  ADDR  00EBH  NOT USED
+CCAP2H . . . . . . . . . . . . . . .  D  ADDR  00FCH  NOT USED
+CCAP3H . . . . . . . . . . . . . . .  D  ADDR  00FDH  NOT USED
+CCAP4H . . . . . . . . . . . . . . .  D  ADDR  00FEH  NOT USED
+CCAPL2H. . . . . . . . . . . . . . .  D  ADDR  00FCH  NOT USED
+CCAPL2L. . . . . . . . . . . . . . .  D  ADDR  00ECH  NOT USED
+CCAPL3H. . . . . . . . . . . . . . .  D  ADDR  00FDH  NOT USED
+CCAPL3L. . . . . . . . . . . . . . .  D  ADDR  00EDH  NOT USED
+CCAPL4H. . . . . . . . . . . . . . .  D  ADDR  00FEH  NOT USED
+CCAPL4L. . . . . . . . . . . . . . .  D  ADDR  00EEH  NOT USED
+CCAPM0 . . . . . . . . . . . . . . .  D  ADDR  00DAH  NOT USED
+CCAPM1 . . . . . . . . . . . . . . .  D  ADDR  00DBH  NOT USED
+CCAPM2 . . . . . . . . . . . . . . .  D  ADDR  00DCH  NOT USED
+CCAPM3 . . . . . . . . . . . . . . .  D  ADDR  00DDH  NOT USED
+CCAPM4 . . . . . . . . . . . . . . .  D  ADDR  00DEH  NOT USED
+CCF0 . . . . . . . . . . . . . . . .  B  ADDR  00D8H  NOT USED
+CCF1 . . . . . . . . . . . . . . . .  B  ADDR  00D9H  NOT USED
+CCF2 . . . . . . . . . . . . . . . .  B  ADDR  00DAH  NOT USED
+CCF3 . . . . . . . . . . . . . . . .  B  ADDR  00DBH  NOT USED
+CCF4 . . . . . . . . . . . . . . . .  B  ADDR  00DCH  NOT USED
+CCON . . . . . . . . . . . . . . . .  D  ADDR  00D8H  NOT USED
+CFINT. . . . . . . . . . . . . . . .  C  ADDR  0033H  NOT USED
+CH . . . . . . . . . . . . . . . . .  D  ADDR  00F9H  NOT USED
+CHECKING_BELL. . . . . . . . . . . .  C  ADDR  0377H
+CHECKING_EMERGENCY . . . . . . . . .  C  ADDR  037AH
+CHECK_ALARM. . . . . . . . . . . . .  C  ADDR  03E1H
+CHECK_KEY. . . . . . . . . . . . . .  C  ADDR  0374H
+CHECK_NEXT_OPTION_1. . . . . . . . .  C  ADDR  0772H
+CHECK_NEXT_OPTION_2. . . . . . . . .  C  ADDR  0777H
+CHECK_WITH_PREVIOUS_POTENTIAL_CANDIDATE  C  ADDR  045DH
+CKCON. . . . . . . . . . . . . . . .  D  ADDR  008FH  NOT USED
+CKCON0 . . . . . . . . . . . . . . .  D  ADDR  008FH  NOT USED
+CKRL . . . . . . . . . . . . . . . .  D  ADDR  0097H  NOT USED
+CKSEL. . . . . . . . . . . . . . . .  D  ADDR  0085H  NOT USED
+CL . . . . . . . . . . . . . . . . .  D  ADDR  00E9H  NOT USED
+CLKREG . . . . . . . . . . . . . . .  D  ADDR  008FH  NOT USED
+CLOCK. . . . . . . . . . . . . . . .  C  ADDR  0A2DH
+CMD. . . . . . . . . . . . . . . . .  C  ADDR  0162H
+CMOD . . . . . . . . . . . . . . . .  D  ADDR  00D9H  NOT USED
+CONFIRM. . . . . . . . . . . . . . .  C  ADDR  02B3H
+CONFIRM_BELL . . . . . . . . . . . .  C  ADDR  071DH
+CONTINUE_1 . . . . . . . . . . . . .  C  ADDR  05ABH
+CONTINUE_2 . . . . . . . . . . . . .  C  ADDR  05B3H
+CONTINUE_3 . . . . . . . . . . . . .  C  ADDR  05D4H
+CONTINUE_4 . . . . . . . . . . . . .  C  ADDR  05DCH
+CONT_BYTE_R. . . . . . . . . . . . .  N  NUMB  00D1H
+CONT_BYTE_W. . . . . . . . . . . . .  N  NUMB  00D0H
+CORRECT_ENTRY. . . . . . . . . . . .  C  ADDR  077FH
+COUNT9 . . . . . . . . . . . . . . .  N  NUMB  0066H
+CPRL2. . . . . . . . . . . . . . . .  B  ADDR  00C8H  NOT USED
+CR . . . . . . . . . . . . . . . . .  B  ADDR  00DEH  NOT USED
+CREATE_DATA. . . . . . . . . . . . .  C  ADDR  0B29H  NOT USED
+CT2. . . . . . . . . . . . . . . . .  B  ADDR  00C9H  NOT USED
+CURRENT_DAY. . . . . . . . . . . . .  N  NUMB  0065H
+CY . . . . . . . . . . . . . . . . .  B  ADDR  00D7H  NOT USED
+DAVAVA . . . . . . . . . . . . . . .  N  NUMB  0061H
+DAY. . . . . . . . . . . . . . . . .  N  NUMB  0067H
+DELAY_1SEC . . . . . . . . . . . . .  C  ADDR  034EH
+DELAY_500MSEC. . . . . . . . . . . .  C  ADDR  035BH
+DETERMINE_MODE . . . . . . . . . . .  C  ADDR  0181H
+DISP . . . . . . . . . . . . . . . .  C  ADDR  0322H
+DISPCH2. . . . . . . . . . . . . . .  C  ADDR  02F5H
+DISP_2DIG_NO . . . . . . . . . . . .  C  ADDR  0330H
+DISP_DAY . . . . . . . . . . . . . .  C  ADDR  0307H
+DISP_MSG . . . . . . . . . . . . . .  C  ADDR  014FH
+DISP_TIME. . . . . . . . . . . . . .  C  ADDR  033CH
+DONE_ENTERING_SERIAL . . . . . . . .  C  ADDR  05E9H
+DP0H . . . . . . . . . . . . . . . .  D  ADDR  0083H  NOT USED
+DP0L . . . . . . . . . . . . . . . .  D  ADDR  0082H  NOT USED
+DP1H . . . . . . . . . . . . . . . .  D  ADDR  0085H  NOT USED
+DP1L . . . . . . . . . . . . . . . .  D  ADDR  0084H  NOT USED
+DPH. . . . . . . . . . . . . . . . .  D  ADDR  0083H
+DPL. . . . . . . . . . . . . . . . .  D  ADDR  0082H
+DURATION . . . . . . . . . . . . . .  N  NUMB  006AH
+DURATION_MSG . . . . . . . . . . . .  C  ADDR  02ABH
+EA . . . . . . . . . . . . . . . . .  B  ADDR  00AFH  NOT USED
+EC . . . . . . . . . . . . . . . . .  B  ADDR  00AEH  NOT USED
+EDIT_BELL. . . . . . . . . . . . . .  C  ADDR  051CH
+EDIT_DURATION. . . . . . . . . . . .  C  ADDR  029AH
+EECON. . . . . . . . . . . . . . . .  D  ADDR  0096H  NOT USED
+EEPROM_DATA. . . . . . . . . . . . .  N  NUMB  0064H
+EEPROM_DELAY . . . . . . . . . . . .  C  ADDR  0A3AH
+EEPROM_DELAY_1 . . . . . . . . . . .  C  ADDR  0A3DH
+EEPROM_START . . . . . . . . . . . .  C  ADDR  09B3H
+EEPROM_STOP. . . . . . . . . . . . .  C  ADDR  09D2H
+EMERGENCY. . . . . . . . . . . . . .  C  ADDR  04E2H
+EMERGENCY_MSG. . . . . . . . . . . .  C  ADDR  0227H
+EMMERGENCY . . . . . . . . . . . . .  C  ADDR  0388H
+EMRG_KEY . . . . . . . . . . . . . .  N  NUMB  00B5H
+END_CHECK_KEY. . . . . . . . . . . .  C  ADDR  037DH
+END_OF_ROUTINE . . . . . . . . . . .  C  ADDR  047EH
+END_OF_THIS_MODULE . . . . . . . . .  C  ADDR  03F9H
+ERROR. . . . . . . . . . . . . . . .  C  ADDR  08E2H
+ERROR_DAY. . . . . . . . . . . . . .  C  ADDR  0859H
+ERROR_EDIT_BELL. . . . . . . . . . .  C  ADDR  06F9H
+ERROR_ENTRY. . . . . . . . . . . . .  C  ADDR  0799H
+ERROR_MSG. . . . . . . . . . . . . .  C  ADDR  01C0H
+ES . . . . . . . . . . . . . . . . .  B  ADDR  00ACH  NOT USED
+ET0. . . . . . . . . . . . . . . . .  B  ADDR  00A9H  NOT USED
+ET1. . . . . . . . . . . . . . . . .  B  ADDR  00ABH  NOT USED
+ET2. . . . . . . . . . . . . . . . .  B  ADDR  00ADH  NOT USED
+EX0. . . . . . . . . . . . . . . . .  B  ADDR  00A8H  NOT USED
+EX1. . . . . . . . . . . . . . . . .  B  ADDR  00AAH  NOT USED
+EXEN2. . . . . . . . . . . . . . . .  B  ADDR  00CBH  NOT USED
+EXF2 . . . . . . . . . . . . . . . .  B  ADDR  00CEH  NOT USED
+EXTI0. . . . . . . . . . . . . . . .  C  ADDR  0003H  NOT USED
+EXTI1. . . . . . . . . . . . . . . .  C  ADDR  0013H  NOT USED
+F0 . . . . . . . . . . . . . . . . .  B  ADDR  00D5H  NOT USED
+FE . . . . . . . . . . . . . . . . .  B  ADDR  009FH  NOT USED
+FIRST. . . . . . . . . . . . . . . .  C  ADDR  0156H
+FLAG1. . . . . . . . . . . . . . . .  N  NUMB  0064H
+GET. . . . . . . . . . . . . . . . .  C  ADDR  0A18H
+GET_DATA . . . . . . . . . . . . . .  C  ADDR  0A13H
+HAS_BELL_ENTRY . . . . . . . . . . .  C  ADDR  0550H
+HERE31 . . . . . . . . . . . . . . .  C  ADDR  0352H
+HERE311. . . . . . . . . . . . . . .  C  ADDR  0365H
+HERE4. . . . . . . . . . . . . . . .  C  ADDR  0350H
+HERE41 . . . . . . . . . . . . . . .  C  ADDR  0363H
+HEX_BCD. . . . . . . . . . . . . . .  C  ADDR  02C4H
+HOURS. . . . . . . . . . . . . . . .  N  NUMB  0052H
+I2C_STOP . . . . . . . . . . . . . .  C  ADDR  0B21H
+IE . . . . . . . . . . . . . . . . .  D  ADDR  00A8H  NOT USED
+IE0. . . . . . . . . . . . . . . . .  B  ADDR  0089H  NOT USED
+IE1. . . . . . . . . . . . . . . . .  B  ADDR  008BH  NOT USED
+INPUT_DAY. . . . . . . . . . . . . .  C  ADDR  07FAH
+INPUT_DURATION . . . . . . . . . . .  C  ADDR  074BH
+INPUT_HOUR_MINUTE. . . . . . . . . .  C  ADDR  086FH
+INT0 . . . . . . . . . . . . . . . .  B  ADDR  00B2H  NOT USED
+INT1 . . . . . . . . . . . . . . . .  B  ADDR  00B3H  NOT USED
+INTI . . . . . . . . . . . . . . . .  C  ADDR  0130H
+IP . . . . . . . . . . . . . . . . .  D  ADDR  00B8H  NOT USED
+IPH. . . . . . . . . . . . . . . . .  D  ADDR  00B7H  NOT USED
+IPH0 . . . . . . . . . . . . . . . .  D  ADDR  00B7H  NOT USED
+IPH1 . . . . . . . . . . . . . . . .  D  ADDR  00B3H  NOT USED
+IPL0 . . . . . . . . . . . . . . . .  D  ADDR  00B8H  NOT USED
+IPL1 . . . . . . . . . . . . . . . .  D  ADDR  00B2H  NOT USED
+IT0. . . . . . . . . . . . . . . . .  B  ADDR  0088H  NOT USED
+IT1. . . . . . . . . . . . . . . . .  B  ADDR  008AH  NOT USED
+ITS_BELL . . . . . . . . . . . . . .  C  ADDR  0880H
+ITS_MODE_1 . . . . . . . . . . . . .  C  ADDR  0532H
+ITS_MODE_1__ . . . . . . . . . . . .  C  ADDR  0659H
+ITS_MODE_2 . . . . . . . . . . . . .  C  ADDR  06A5H
+IT_IS_MODE_1 . . . . . . . . . . . .  C  ADDR  055CH
+IT_IS_MODE_1_. . . . . . . . . . . .  C  ADDR  0602H
+KBE. . . . . . . . . . . . . . . . .  D  ADDR  009DH  NOT USED
+KBF. . . . . . . . . . . . . . . . .  D  ADDR  009EH  NOT USED
+KBLS . . . . . . . . . . . . . . . .  D  ADDR  009CH  NOT USED
+KEY. . . . . . . . . . . . . . . . .  C  ADDR  03CDH
+KEYCODE. . . . . . . . . . . . . . .  C  ADDR  01ECH
+KEYPD. . . . . . . . . . . . . . . .  C  ADDR  038DH
+LOAD_NEXT_BELL . . . . . . . . . . .  C  ADDR  03FAH
+LOAD_NEXT_BELL_MODULE. . . . . . . .  C  ADDR  040CH
+LOOP . . . . . . . . . . . . . . . .  C  ADDR  0122H
+LOOP1. . . . . . . . . . . . . . . .  C  ADDR  0899H
+LOOP2. . . . . . . . . . . . . . . .  C  ADDR  092CH
+LOOP3. . . . . . . . . . . . . . . .  C  ADDR  0847H
+LOOP4. . . . . . . . . . . . . . . .  C  ADDR  04B2H
+LOOP5. . . . . . . . . . . . . . . .  C  ADDR  049EH
+LOOP6. . . . . . . . . . . . . . . .  C  ADDR  0814H
+LOOP7. . . . . . . . . . . . . . . .  C  ADDR  07E5H
+LOOP8. . . . . . . . . . . . . . . .  C  ADDR  050AH
+LOOP9. . . . . . . . . . . . . . . .  C  ADDR  059AH
+LOOP_BYTE. . . . . . . . . . . . . .  C  ADDR  0AFFH
+LOOP_READ. . . . . . . . . . . . . .  C  ADDR  0B0FH
+LOOP_READ1 . . . . . . . . . . . . .  C  ADDR  0B13H
+LOOP_SEND. . . . . . . . . . . . . .  C  ADDR  0B03H
+MEMORY_ADDRESS1. . . . . . . . . . .  N  NUMB  0062H  NOT USED
+MEMORY_ADDRESS2. . . . . . . . . . .  N  NUMB  0063H  NOT USED
+MEM_VAL. . . . . . . . . . . . . . .  N  NUMB  0000H  NOT USED
+MESSAGE1 . . . . . . . . . . . . . .  C  ADDR  019DH
+MESSAGE2 . . . . . . . . . . . . . .  C  ADDR  01A8H
+MESSAGE3 . . . . . . . . . . . . . .  C  ADDR  01B3H
+MESSAGE5 . . . . . . . . . . . . . .  C  ADDR  0208H
+MIN. . . . . . . . . . . . . . . . .  N  NUMB  0051H
+MODE . . . . . . . . . . . . . . . .  N  NUMB  007DH
+N1 . . . . . . . . . . . . . . . . .  C  ADDR  08ABH
+N10. . . . . . . . . . . . . . . . .  C  ADDR  0824H
+N102 . . . . . . . . . . . . . . . .  C  ADDR  04BFH
+N103 . . . . . . . . . . . . . . . .  C  ADDR  04BCH
+N11. . . . . . . . . . . . . . . . .  C  ADDR  0829H
+N12. . . . . . . . . . . . . . . . .  C  ADDR  082EH
+N13. . . . . . . . . . . . . . . . .  C  ADDR  084FH
+N14. . . . . . . . . . . . . . . . .  C  ADDR  0516H
+N15. . . . . . . . . . . . . . . . .  C  ADDR  0628H
+N16. . . . . . . . . . . . . . . . .  C  ADDR  0791H
+N17. . . . . . . . . . . . . . . . .  C  ADDR  063FH
+N18. . . . . . . . . . . . . . . . .  C  ADDR  0699H
+N2 . . . . . . . . . . . . . . . . .  C  ADDR  08B1H
+N3 . . . . . . . . . . . . . . . . .  C  ADDR  08C9H
+N4 . . . . . . . . . . . . . . . . .  C  ADDR  08CFH
+N5 . . . . . . . . . . . . . . . . .  C  ADDR  08FFH
+N6 . . . . . . . . . . . . . . . . .  C  ADDR  0905H
+N7 . . . . . . . . . . . . . . . . .  C  ADDR  091CH
+N8 . . . . . . . . . . . . . . . . .  C  ADDR  0922H
+N9 . . . . . . . . . . . . . . . . .  C  ADDR  0935H
+NEW_BELL . . . . . . . . . . . . . .  C  ADDR  0667H
+NEW_BELL_MSG . . . . . . . . . . . .  C  ADDR  028BH
+NEXT . . . . . . . . . . . . . . . .  C  ADDR  0883H
+NEXT_ENTRY . . . . . . . . . . . . .  C  ADDR  05C0H
+NEXT_ITERATION . . . . . . . . . . .  C  ADDR  0430H
+NOTHING_TO_ADD . . . . . . . . . . .  C  ADDR  06A7H
+NO_BELL. . . . . . . . . . . . . . .  C  ADDR  025FH
+OSCCON . . . . . . . . . . . . . . .  D  ADDR  0086H  NOT USED
+OV . . . . . . . . . . . . . . . . .  B  ADDR  00D2H  NOT USED
+P. . . . . . . . . . . . . . . . . .  B  ADDR  00D0H  NOT USED
+P0 . . . . . . . . . . . . . . . . .  D  ADDR  0080H  NOT USED
+P1 . . . . . . . . . . . . . . . . .  D  ADDR  0090H  NOT USED
+P1M1 . . . . . . . . . . . . . . . .  D  ADDR  00D4H  NOT USED
+P1M2 . . . . . . . . . . . . . . . .  D  ADDR  00E2H  NOT USED
+P2 . . . . . . . . . . . . . . . . .  D  ADDR  00A0H
+P3 . . . . . . . . . . . . . . . . .  D  ADDR  00B0H
+P3M1 . . . . . . . . . . . . . . . .  D  ADDR  00D5H  NOT USED
+P3M2 . . . . . . . . . . . . . . . .  D  ADDR  00E3H  NOT USED
+P4 . . . . . . . . . . . . . . . . .  D  ADDR  00C0H  NOT USED
+P4M1 . . . . . . . . . . . . . . . .  D  ADDR  00D6H  NOT USED
+P4M2 . . . . . . . . . . . . . . . .  D  ADDR  00E4H  NOT USED
+P5 . . . . . . . . . . . . . . . . .  D  ADDR  00E8H  NOT USED
+PASSWORD . . . . . . . . . . . . . .  C  ADDR  01E7H
+PC . . . . . . . . . . . . . . . . .  B  ADDR  00BEH  NOT USED
+PCON . . . . . . . . . . . . . . . .  D  ADDR  0087H  NOT USED
+POTENTIAL_CANDIDATE. . . . . . . . .  C  ADDR  0458H
+PPCL . . . . . . . . . . . . . . . .  B  ADDR  00BEH  NOT USED
+PROCEED_TO_CMP_TIME. . . . . . . . .  C  ADDR  03E9H
+PS . . . . . . . . . . . . . . . . .  B  ADDR  00BCH  NOT USED
+PSL. . . . . . . . . . . . . . . . .  B  ADDR  00BCH  NOT USED
+PSW. . . . . . . . . . . . . . . . .  D  ADDR  00D0H  NOT USED
+PT0. . . . . . . . . . . . . . . . .  B  ADDR  00B9H  NOT USED
+PT0L . . . . . . . . . . . . . . . .  B  ADDR  00B9H  NOT USED
+PT1. . . . . . . . . . . . . . . . .  B  ADDR  00BBH  NOT USED
+PT1L . . . . . . . . . . . . . . . .  B  ADDR  00BBH  NOT USED
+PT2. . . . . . . . . . . . . . . . .  B  ADDR  00BDH  NOT USED
+PT2L . . . . . . . . . . . . . . . .  B  ADDR  00BDH  NOT USED
+PX0. . . . . . . . . . . . . . . . .  B  ADDR  00B8H  NOT USED
+PX0L . . . . . . . . . . . . . . . .  B  ADDR  00B8H  NOT USED
+PX1. . . . . . . . . . . . . . . . .  B  ADDR  00BAH  NOT USED
+PX1L . . . . . . . . . . . . . . . .  B  ADDR  00BAH  NOT USED
+RB8. . . . . . . . . . . . . . . . .  B  ADDR  009AH  NOT USED
+RCAP2H . . . . . . . . . . . . . . .  D  ADDR  00CBH  NOT USED
+RCAP2L . . . . . . . . . . . . . . .  D  ADDR  00CAH  NOT USED
+RCLK . . . . . . . . . . . . . . . .  B  ADDR  00CDH  NOT USED
+RD . . . . . . . . . . . . . . . . .  B  ADDR  00B7H  NOT USED
+READY. . . . . . . . . . . . . . . .  C  ADDR  0170H
+READ_BYTE. . . . . . . . . . . . . .  C  ADDR  0A8AH
+READ_DATA. . . . . . . . . . . . . .  C  ADDR  0985H
+READ_MINUTES . . . . . . . . . . . .  C  ADDR  08F4H
+READ_PASSWORD. . . . . . . . . . . .  C  ADDR  0A47H
+READ_RTC . . . . . . . . . . . . . .  C  ADDR  0ACEH
+REDO . . . . . . . . . . . . . . . .  C  ADDR  03C7H
+REN. . . . . . . . . . . . . . . . .  B  ADDR  009CH  NOT USED
+REPEAT1. . . . . . . . . . . . . . .  C  ADDR  0354H
+REPEAT11 . . . . . . . . . . . . . .  C  ADDR  0367H
+RESET. . . . . . . . . . . . . . . .  C  ADDR  0000H  NOT USED
+RI . . . . . . . . . . . . . . . . .  B  ADDR  0098H  NOT USED
+RING_BELL. . . . . . . . . . . . . .  C  ADDR  0408H
+ROW. . . . . . . . . . . . . . . . .  C  ADDR  03C2H
+RS0. . . . . . . . . . . . . . . . .  B  ADDR  00D3H  NOT USED
+RS1. . . . . . . . . . . . . . . . .  B  ADDR  00D4H  NOT USED
+RXD. . . . . . . . . . . . . . . . .  B  ADDR  00B0H  NOT USED
+SADDR. . . . . . . . . . . . . . . .  D  ADDR  00A9H  NOT USED
+SADDR_0. . . . . . . . . . . . . . .  D  ADDR  00A9H  NOT USED
+SADDR_1. . . . . . . . . . . . . . .  D  ADDR  00AAH  NOT USED
+SADEN. . . . . . . . . . . . . . . .  D  ADDR  00B9H  NOT USED
+SADEN_0. . . . . . . . . . . . . . .  D  ADDR  00B9H  NOT USED
+SADEN_1. . . . . . . . . . . . . . .  D  ADDR  00BAH  NOT USED
+SAVE_BELL. . . . . . . . . . . . . .  C  ADDR  070BH
+SBUF . . . . . . . . . . . . . . . .  D  ADDR  0099H  NOT USED
+SCL. . . . . . . . . . . . . . . . .  N  NUMB  00A0H
+SCON . . . . . . . . . . . . . . . .  D  ADDR  0098H  NOT USED
+SDA. . . . . . . . . . . . . . . . .  N  NUMB  00A1H
+SEC. . . . . . . . . . . . . . . . .  N  NUMB  0050H
+SECOND . . . . . . . . . . . . . . .  C  ADDR  015CH
+SECONDS. . . . . . . . . . . . . . .  C  ADDR  02C0H
+SEND . . . . . . . . . . . . . . . .  C  ADDR  09F3H
+SEND_DATA. . . . . . . . . . . . . .  C  ADDR  09F1H
+SERIAL . . . . . . . . . . . . . . .  N  NUMB  007CH
+SERIAL_NO_1. . . . . . . . . . . . .  C  ADDR  027DH
+SETT_BELL. . . . . . . . . . . . . .  C  ADDR  0383H
+SETT_TIME. . . . . . . . . . . . . .  C  ADDR  037EH
+SET_BELL . . . . . . . . . . . . . .  C  ADDR  04F1H
+SET_BELL_VERIFIED. . . . . . . . . .  C  ADDR  04F1H
+SET_FLAG . . . . . . . . . . . . . .  C  ADDR  04DDH
+SET_TIME . . . . . . . . . . . . . .  C  ADDR  07A8H
+SINT . . . . . . . . . . . . . . . .  C  ADDR  0023H  NOT USED
+SKIP1. . . . . . . . . . . . . . . .  C  ADDR  031CH
+SKIP111. . . . . . . . . . . . . . .  C  ADDR  0301H
+SM0. . . . . . . . . . . . . . . . .  B  ADDR  009FH  NOT USED
+SM1. . . . . . . . . . . . . . . . .  B  ADDR  009EH  NOT USED
+SM2. . . . . . . . . . . . . . . . .  B  ADDR  009DH  NOT USED
+SP . . . . . . . . . . . . . . . . .  D  ADDR  0081H  NOT USED
+SPCON. . . . . . . . . . . . . . . .  D  ADDR  00C3H  NOT USED
+SPCR . . . . . . . . . . . . . . . .  D  ADDR  00D5H  NOT USED
+SPDAT. . . . . . . . . . . . . . . .  D  ADDR  00C5H  NOT USED
+SPDR . . . . . . . . . . . . . . . .  D  ADDR  0086H  NOT USED
+SPSR . . . . . . . . . . . . . . . .  D  ADDR  00AAH  NOT USED
+SPSTA. . . . . . . . . . . . . . . .  D  ADDR  00C4H  NOT USED
+T0 . . . . . . . . . . . . . . . . .  B  ADDR  00B4H  NOT USED
+T1 . . . . . . . . . . . . . . . . .  B  ADDR  00B5H  NOT USED
+T2CON. . . . . . . . . . . . . . . .  D  ADDR  00C8H  NOT USED
+T2MOD. . . . . . . . . . . . . . . .  D  ADDR  00C9H  NOT USED
+TB8. . . . . . . . . . . . . . . . .  B  ADDR  009BH  NOT USED
+TCLK . . . . . . . . . . . . . . . .  B  ADDR  00CCH  NOT USED
+TCON . . . . . . . . . . . . . . . .  D  ADDR  0088H  NOT USED
+TEMP_DAY . . . . . . . . . . . . . .  N  NUMB  0053H
+TEMP_HOUR. . . . . . . . . . . . . .  N  NUMB  0041H  NOT USED
+TEMP_MIN . . . . . . . . . . . . . .  N  NUMB  0042H  NOT USED
+TEMP_SERIAL. . . . . . . . . . . . .  N  NUMB  0043H  NOT USED
+TF0. . . . . . . . . . . . . . . . .  B  ADDR  008DH  NOT USED
+TF1. . . . . . . . . . . . . . . . .  B  ADDR  008FH  NOT USED
+TF2. . . . . . . . . . . . . . . . .  B  ADDR  00CFH  NOT USED
+TH0. . . . . . . . . . . . . . . . .  D  ADDR  008CH  NOT USED
+TH1. . . . . . . . . . . . . . . . .  D  ADDR  008DH  NOT USED
+TH2. . . . . . . . . . . . . . . . .  D  ADDR  00CDH  NOT USED
+TI . . . . . . . . . . . . . . . . .  B  ADDR  0099H  NOT USED
+TIMER0 . . . . . . . . . . . . . . .  C  ADDR  000BH  NOT USED
+TIMER1 . . . . . . . . . . . . . . .  C  ADDR  001BH  NOT USED
+TIMER2 . . . . . . . . . . . . . . .  C  ADDR  002BH  NOT USED
+TIME_KEY . . . . . . . . . . . . . .  N  NUMB  00B3H
+TL0. . . . . . . . . . . . . . . . .  D  ADDR  008AH  NOT USED
+TL1. . . . . . . . . . . . . . . . .  D  ADDR  008BH  NOT USED
+TL2. . . . . . . . . . . . . . . . .  D  ADDR  00CCH  NOT USED
+TMOD . . . . . . . . . . . . . . . .  D  ADDR  0089H  NOT USED
+TR0. . . . . . . . . . . . . . . . .  B  ADDR  008CH  NOT USED
+TR1. . . . . . . . . . . . . . . . .  B  ADDR  008EH  NOT USED
+TR2. . . . . . . . . . . . . . . . .  B  ADDR  00CAH  NOT USED
+TXD. . . . . . . . . . . . . . . . .  B  ADDR  00B1H  NOT USED
+UNPACK . . . . . . . . . . . . . . .  C  ADDR  02E5H
+UP11 . . . . . . . . . . . . . . . .  C  ADDR  02FBH
+UP12 . . . . . . . . . . . . . . . .  C  ADDR  030DH  NOT USED
+UP13 . . . . . . . . . . . . . . . .  C  ADDR  0314H
+UP2. . . . . . . . . . . . . . . . .  C  ADDR  0B31H
+UPDATE_POTENTIAL_CANDIDATE . . . . .  C  ADDR  0475H
+VER_PASSWORD . . . . . . . . . . . .  C  ADDR  048CH
+WAIT . . . . . . . . . . . . . . . .  C  ADDR  0179H
+WAIT_FOR_ENTER . . . . . . . . . . .  C  ADDR  0620H
+WAIT_FOR_ENTER_KEY . . . . . . . . .  C  ADDR  0787H
+WAIT_FOR_ENTER_KEY_1 . . . . . . . .  C  ADDR  0637H
+WAIT_FOR_ENTER_KEY_2 . . . . . . . .  C  ADDR  0691H
+WDTCON . . . . . . . . . . . . . . .  D  ADDR  00A7H  NOT USED
+WDTPRG . . . . . . . . . . . . . . .  D  ADDR  00A7H  NOT USED
+WDTRST . . . . . . . . . . . . . . .  D  ADDR  00A6H  NOT USED
+WEEKDAY. . . . . . . . . . . . . . .  C  ADDR  01CFH
+WELCOME. . . . . . . . . . . . . . .  C  ADDR  0190H
+WR . . . . . . . . . . . . . . . . .  B  ADDR  00B6H  NOT USED
+WRITE_BYTE . . . . . . . . . . . . .  C  ADDR  0A53H
+WRITE_DATA . . . . . . . . . . . . .  C  ADDR  093BH

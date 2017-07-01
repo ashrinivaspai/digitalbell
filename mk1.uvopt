@@ -133,6 +133,13 @@
         </SetRegEntry>
       </TargetDriverDllRegistry>
       <Breakpoint/>
+      <WatchWindow1>
+        <Ww>
+          <count>0</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>TEMP_DAY</ItemText>
+        </Ww>
+      </WatchWindow1>
       <Tracepoint>
         <THDelay>0</THDelay>
       </Tracepoint>
@@ -182,8 +189,8 @@
       <Focus>0</Focus>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>.\SET_TIME.ASM</PathWithFileName>
-      <FilenameWithoutPath>SET_TIME.ASM</FilenameWithoutPath>
+      <PathWithFileName>.\set_bell_1.asm</PathWithFileName>
+      <FilenameWithoutPath>set_bell_1.asm</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

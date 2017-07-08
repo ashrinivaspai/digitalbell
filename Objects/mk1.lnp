@@ -1,3 +1,0 @@
-".\Objects\set_bell_1.obj" 
-TO ".\Objects\mk1" 
-PRINT(".\Listings\mk1.m51") RAMSIZE(256) 

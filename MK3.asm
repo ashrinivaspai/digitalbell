@@ -1,12 +1,12 @@
 ;**********************************************************************************************
 ;The following set of code is assembly level code for digital bell system
-;Author: Sukesh Rao, Srinivas Pai, Sudesh Pai, Gayathri, Arpitha and 
+;Author: Sukesh Rao, Srinivas Pai, Sudesh Pai, Gayathri, Arpitha and Joshil
 ;Version: 0.1
-;Date: 
+;Date: 11/07/2017
 ;**********************************************************************************************
 
 ;**********************************************************************************************
-;------------------------------------EEPROM memory allocation----------------------------------
+;------------------------------------EEPROM MEMORY ALLOCATION----------------------------------
 ;
 ;0X0000H 	NOTHING- ACTUALLY TOTAL NUMBER OF BELLS -BUT THEN LEFT BLANK
 ;0X0001H 	BELL COUNT FOR MODE-1 MONDAY
@@ -35,12 +35,13 @@
 ;0X0E03H 	MODE-2 SUNDAY BELL SERIAL NO. 1 HOUR VALUE
 ;......
 ;......
-;0X7001H 	PIN 1ST DIGIT
+;0X1001H 	PIN 1ST DIGIT -->CHANGE TO 0F01 IF USING 4KB
 ;......
-;0X7004H 	PIN 4TH DIGIT
+;0X1004H 	PIN 4TH DIGIT --> """"
 ;......
-;0X7FFFH	MODE BIT
+;0X1FFFH	MODE BIT 	  --> """"
 ;
+;------MINIMUM EEPROM REQUIRED IS 4KB, CURRENTLY IMPLEMENTED CODE WORKS ON 8KB AND HIGHER------
 ;**********************************************************************************************
 
 
@@ -90,13 +91,13 @@ TEMP_MIN	 		EQU 	42H
 IS_BELL_UPDATED 	EQU 	6EH
 NO_BELL_FLAG 		EQU  	6FH
 FLAG2 				EQU 	6DH
-
+ANY_CHANGES 		EQU 	7EH
 
 ORG    0100H
 
 
 ;***********************************************************************************************
-;							LOOK-UP TABLES
+;										LOOK-UP TABLES
 ;***********************************************************************************************
 WELCOME_MSG: 	DB '    WELCOME!',0fh
 MESSAGE1: 		DB '     HH:MM', 0FH
@@ -114,7 +115,6 @@ BELL_MESSAGE: 	DB ' SELECT OPTION',0FH
 BELL_OPTIONS: 	DB '1)NEW  2)EDIT',0FH
 BELL_NUMBER_MSG:DB 'BELL. NO.[01-',0FH
 NO_BELL: 		DB '  NO BELLS SET',0FH
-;TEMP: 		DB 12H,23H,01H
 BELL_ACK_1: 	DB '  BELL IS SET!',0FH
 SERIAL_NO_1: 	DB ' BELL NO. IS ', 0FH
 NEW_BELL_MSG: 	DB ' NEW BELL TIME', 0FH
@@ -131,11 +131,12 @@ MODE_MSG2: 		DB '      2:MODE 2',0FH
 PASSMSG2: 		DB 'SET NEW PASSWORD',0FH
 DISP_BELL_SYS: 	DB '  BELL SYSTEM  ',0FH
 NEXT_BELL_MSG: 	DB 'NEXT BELL: ',0fh
-NO_BELL_DISP:	DB '    NO BELL!    ' ,0FH
+NO_BELL_DISP:	DB '    NO BELL!' ,0FH
 INI_MSG: 		DB 'INITIALIZING',0FH
 MODE_SET_MSG: 	DB 'MODE IS UPDATED!', 0FH
-TEMP: 			DB 0H, 0H, 0H, 0H, 0H, 0H, 0H
 BELL_RINGING: 	DB 'BELL IS RINGING',0FH
+LOADING: 		DB '  LOADING BELL',0FH
+TEMP: 			DB 0H, 0H, 0H, 0H, 0H, 0H, 0H ;USE THIS TO RESET THE BELL SERIAL NUMBER
 ;*************************************************************************************************
 ;						    END of LOOK-UP TABLES
 ;*************************************************************************************************
@@ -146,16 +147,19 @@ BELL_RINGING: 	DB 'BELL IS RINGING',0FH
 ;**********************************************************************************************
 
 BEGIN:
-	ACALL 	INTI    						;CALL THE INITIALIZATION MODULE
-	CLR 	SCL							;SCL: SERIAL CLOCK LINE ->MEANS THE CLOCK INPUT FOR I2C
-	CLR		SDA 							;SDA: SERIAL DATA I/P & O/P ->MEANS THE INPUR AND OUTPUT LINE
+	ACALL 	INTI    					;CALL THE INITIALIZATION MODULE
+	CLR 	SCL 						;SCL: SERIAL CLOCK LINE ->MEANS THE CLOCK INPUT FOR I2C
+	CLR		SDA 						;SDA: SERIAL DATA I/P & O/P ->MEANS THE INPUR AND OUTPUT LINE
 	CLR		P2.2 			
 	CLR 	P3.7 						;SOME UNECESSARY STATEMENTS
 	NOP 								;ANOTHER UNECESSARY STATEMENT
-	SETB  	SCL 							; 	""		""
+	SETB  	SCL 						; 	""		""
 	SETB 	SDA
 	NOP
+
 	;LCALL CREATE_DATA
+
+
 	LCALL 	CLEAR
 	ACALL 	INTI 						;just trying to debug a LCD problem
 	MOV 	DPTR, #INI_MSG
@@ -163,6 +167,7 @@ BEGIN:
 
 	MOV 	A, #'.' 					;display nice ... animation
 	MOV  	R0, #04H
+
 	ANIMATE:
 	LCALL 	DELAY_500MSEC
 	LCALL 	DISP
@@ -171,23 +176,35 @@ BEGIN:
 	LCALL 	KEYPD_NO_LOOP 
 	CJNE 	A, #39H, WELCOME 			;if pressed 9 goto bootmenu
 	LCALL 	BOOT_MENU
+
 	
 	WELCOME:
+
 	LCALL 	CLEAR
 	MOV 	DPTR, #WELCOME_MSG 			;DISPLAY NICE WELCOME MESSAGE
 	LCALL 	DISP_MSG 					;disp_msg includes one sec delay
 	LCALL 	CLEAR
 	MOV 	DPTR, #DISP_BELL_SYS
 	LCALL 	DISP_MSG
+
+	RELOAD:
+	LCALL 	CLEAR
+	MOV 	ANY_CHANGES, #00H
+	MOV 	IS_BELL_UPDATED, #0FFH
+	MOV 	NO_BELL_FLAG, #00H
 	MOV 	CURRENT_DAY, #00H 			;initialize the day
 	MOV 	PREVIOUS_SEC, #0FFH
 	MOV 	4EH, ':' 					;initializing the blinking cursor
-	LOOP:								;BEGINNING OF ACTUAL 'MAIN' LOOP
 	LCALL 	DETERMINE_MODE
+	
+	LOOP:								;BEGINNING OF ACTUAL 'MAIN' LOOP
 	LCALL 	READ_RTC
 	LCALL 	CHECK_KEY 					;CHECK FOR THE PRESS OF THE SET_TIME, SET_BELL, EMERGENCY_KEY
+	MOV 	A, ANY_CHANGES
+	CJNE 	A, #00H, RELOAD 			;IF ANY CHANGES LIKE BELL TIME IS MADE GO TO BEGINNING TO RESET THE VALUES
 	LCALL 	CHECK_ALARM 				;CHECK WHETHER WE NEED TO RING THE BELL
-	LCALL 	CLEAR 						
+	LCALL 	CLEAR 			
+	LCALL 	READ_RTC			
 	LCALL 	DISP_TIME_BLINKING					
 	MOV 	A, #14H
 	LCALL 	CMD
@@ -231,14 +248,7 @@ INTI:
 	LCALL 	CLEAR
 	RET
 
-;**********************************************************************************************
-;This module is used to display the message pointed by DPTR on the DPTR on the screen
-;DEPENDANCIES:DISPCH2, DELAY_1SEC
-;**********************************************************************************************
-DISP_MSG:
-	LCALL DISPCH2
-	LCALL DELAY_1SEC
-	RET
+;
 
 ;**********************************************************************************************
 ;This module moves the cursor back to first line first position
@@ -296,7 +306,7 @@ READY:
 ;DEPENDANCIES:READ_DATA
 ;*************************************************************************************************
 DETERMINE_MODE:
-	MOV 	DPTR, #07FFFH
+	MOV 	DPTR, #01fffH
 	MOV 	R1, #54H
 	MOV 	COUNT9, #01H
 	LCALL 	READ_DATA
@@ -365,6 +375,15 @@ UNPACK:
 	ANL		A,#0FH
 	ADD		A,#30H
 	MOV		R3,A
+	RET
+
+;*************************************************************************************************
+;This module is used to display the message pointed by DPTR on the DPTR on the screen
+;DEPENDANCIES:DISPCH2, DELAY_1SEC
+;*************************************************************************************************
+DISP_MSG:
+	LCALL DISPCH2
+	LCALL DELAY_1SEC
 	RET
 
 ;*************************************************************************************************
@@ -496,6 +515,7 @@ DISP_TIME_BLINKING:
 	MOV 	A, SEC
 	CJNE 	A, 4FH, CHNAGE_SYMBOL
 	DISPLAY_BLINKING_CURSOR:
+	MOV 	4FH, SEC
 	MOV 	40h, HOURS
 	LCALL 	DISP_2DIG_NO
 	MOV 	A, 4EH
@@ -504,11 +524,12 @@ DISP_TIME_BLINKING:
 	LCALL 	DISP_2DIG_NO
 	RET
 	CHNAGE_SYMBOL:
-		CJNE 4EH, ':', CHANGE_TO_COLON
-		MOV 4EH, ' '
+		MOV 	A, 4EH	
+		CJNE A, #':', CHANGE_TO_COLON
+		MOV 4EH, #' '
 		SJMP DISPLAY_BLINKING_CURSOR
 		CHANGE_TO_COLON:
-		MOV 4EH, ' '
+		MOV 4EH, #':'
 		SJMP DISPLAY_BLINKING_CURSOR
 
 ;*************************************************************************************************
@@ -560,7 +581,6 @@ DELAY_500MSEC:
 ;*************************************************************************************************
 CHECK_KEY:
 	JNB 	TIME_KEY, SETT_TIME	;PLEASE NOTICE THE DOUBLE 'T'
-	;SJMP SETT_TIME
 	CHECKING_BELL:
 	JNB 	BELL_KEY, SETT_BELL
 	CHECKING_EMERGENCY:
@@ -574,17 +594,20 @@ CHECK_KEY:
 ;*************************************************************************************************
 
 SETT_TIME:
-	LCALL SET_TIME 			;WE REQUIRE THIS MANIPULATION BECAUSE
-							;1)JNB INTERNALLY SJMPs AND SET_TIME IS OUT OF IT'S RANGE				
-							;2)ITS JMP AND NOT CALL AND IN FUTURE WHILE ADDING NEW FEATURES IT MAY CAUSE BUG
-	SJMP CHECKING_BELL 
+	MOV 	ANY_CHANGES, #0FFH 	;SAY THAT WE ARE GOING TO MAKE SOME CHANGES
+	LCALL 	SET_TIME 			;WE REQUIRE THIS MANIPULATION BECAUSE
+								;1)JNB INTERNALLY SJMPs AND SET_TIME IS OUT OF IT'S RANGE				
+								;2)ITS JMP AND NOT CALL AND IN FUTURE WHILE ADDING NEW FEATURES IT MAY CAUSE BUG
+	SJMP 	CHECKING_BELL 
 SETT_BELL:
-	LCALL SET_BELL
+	MOV 	ANY_CHANGES, #0FFH
+	LCALL 	SET_BELL
 
-	SJMP CHECKING_EMERGENCY
+	SJMP 	CHECKING_EMERGENCY
+
 EMMERGENCY:
-	LCALL EMERGENCY
-	SJMP END_CHECK_KEY
+	LCALL 	EMERGENCY
+	SJMP 	END_CHECK_KEY
 
 
 KEYPD_NO_LOOP:   
@@ -692,13 +715,15 @@ CHECK_ALARM:
 	MOV 	A, DAY
 	CJNE 	A, 65H , LOAD_NEXT_BELL 			;65h stands for CURRENT_DAY
 	PROCEED_TO_CMP_TIME:
-		MOV 	CURRENT_DAY, DAY 		
+		MOV 	CURRENT_DAY, DAY 				
 		MOV 	A, HOURS
 		CJNE 	A, 62H, END_OF_THIS_MODULE 		;is hour equal to bell_hour?
 		MOV 	A, MIN
 		CJNE 	A, 63H, END_OF_THIS_MODULE 		;is min equal?
 		MOV 	A, NO_BELL_FLAG
-		CJNE 	A, #00H,END_OF_THIS_MODULE 
+		CJNE 	A, #00H,END_OF_THIS_MODULE
+		MOV 	A, IS_BELL_UPDATED
+		CJNE 	A, #0FFH,END_OF_THIS_MODULE 
 		LCALL 	RING_BELL 						;if equal ring bell else RET
 	END_OF_THIS_MODULE:
 	RET
@@ -706,19 +731,22 @@ LOAD_NEXT_BELL:
 	MOV 	CURRENT_DAY, DAY 					;these three move instruction are 
 	MOV 	BELL_HOUR, HOURS 					;needed for first time i.e., 
 	MOV 	BELL_MIN, MIN 						;after reset
+	MOV 	44h, HOURS
+	MOV 	45h, MIN
 	LCALL 	LOAD_NEXT_BELL_MODULE 				;now load next bell
 	SJMP 	PROCEED_TO_CMP_TIME					;again go back to cmd_time
 	
 RING_BELL:
 	;MAKE HIGH ON SOME PIN
+	SETB 	P3.7
 	LCALL 	CLEAR
 	MOV 	DPTR, #BELL_RINGING
 	LCALL	DISPCH2
 	MOV 	R2, BELL_DURATION
 	RING_BELL_DELAY:
 		LCALL 	DELAY_1SEC
-		DJNZ 	R2, RING_BELL_DELAY
-	;MAKE SOME PIN LOW
+		DJNZ 	R2, RING_BELL_DELAY 
+	CLR 	P3.7
 	LCALL 	CLEAR
 	LCALL 	LOAD_NEXT_BELL_MODULE 				;load next bell
 
@@ -741,13 +769,15 @@ LOAD_NEXT_BELL_MODULE:
 	CJNE 	R0, #00H, PROCEED
 	lJMP 	NO_BELLS_PRESENT
 	PROCEED:
+	MOV 	DPTR, #LOADING
+	LCALL 	DISP_MSG
 	MOV 	R0, #00H 							;initializing the counter for linear search
 	MOV 	A, CURRENT_DAY
 	CJNE 	R4, #02H, ADD_NOTHING__1
 	ADD 	A, #07H
+
 	ADD_NOTHING__1:
 	MOV 	DPH, A
-
 	NEXT_ITERATION:
 	MOV 	A, #03H 	 						;VALUES START FROM 0X0*00H
 	INC 	R0									;AND ALSO SERIAL NUMBER STARTS FROM 01
@@ -758,14 +788,14 @@ LOAD_NEXT_BELL_MODULE:
 	MOV 	R1, #41H 							;41H=TEMP_HOUR
 	LCALL 	READ_DATA 	
 	MOV 	A, 41H 								;NOW A= TEMP_HOUR=MAY BE THE NEXT BELL VALUE
-	MOV 	B, BELL_HOUR
+	MOV 	B, HOURS
 	CLR 	C
 	SUBB 	A, B 						
 	JC 		END_OF_ROUTINE 						;WE NEED HIGHER OR EQUAL HOUR VALUE AND NOT LESS
 	JNZ 	POTENTIAL_CANDIDATE
 	CLR 	C
 	MOV 	A, 42H
-	MOV 	B, BELL_MIN
+	MOV 	B, MIN
 	SUBB 	A, B
 	JC 		END_OF_ROUTINE
 	JZ 		END_OF_ROUTINE
@@ -784,10 +814,11 @@ LOAD_NEXT_BELL_MODULE:
 			MOV 	A, BELL_MIN
 			MOV 	B, 45H
 			CLR 	C
-			SUBB 	A, B  							;if not checked these condition updation wont happen and will stuck with no bell
+			SUBB 	A, B  							;if not checked these condition updation wont happen and will stuck with no bell.
 			JZ 		UPDATE_POTENTIAL_CANDIDATE 		;for example current time 4:15 and potential candidate will be 4:15 and actual next 
-													;bell must be at 4:20 so think.....what 4:20 is greater than 4:15 but is also more than
-													;4:15 so if not for this condition the code would have skipped this value and any next 
+													;bell must be at 4:20 so think.....4:20 is greater than 4:15
+													; but is also more than
+													;4:15. so if not for this condition the code would have skipped this value and next
 
 			CONTINUE_WITH_POTENTIAL_CANDIDATE:
 			MOV 	B, 44H 							;previous potential value of hour
@@ -804,12 +835,13 @@ LOAD_NEXT_BELL_MODULE:
 
 		UPDATE_POTENTIAL_CANDIDATE:
 			MOV 	IS_BELL_UPDATED, #0FFH 			;marking that the bell is updated
-			MOV 	44H, 41H
-			MOV 	45H, 42H
-			MOV 	46H, 43H
+			LCALL CLEAR
+			MOV 	44H, 41H 						;moving to potential candidate location
+			MOV 	45H, 42H 						; 				""
+			MOV 	46H, 43H 						; 				""
 	END_OF_ROUTINE:
 		MOV 	A, R0
-		CJNE 	A ,7CH,  NEXT_ITERATION 				;7ch is max bell available for that day
+		CJNE 	A ,7CH,  NEXT_ITERATION 			;7ch is max bell available for that day
 
 		MOV 	A, IS_BELL_UPDATED
 		CJNE 	A, #0FFH, NO_BELLS_PRESENT
@@ -879,12 +911,15 @@ VER_PASSWORD:
 
 EMERGENCY:
 	LCALL 	VER_PASSWORD
+	;MAKE SOME PIN HIGH
+	SETB 	P3.7
+	EMERGENCY_VERIFIED:
 	LCALL 	CLEAR
-	LCALL 	DELAY_1SEC
+	LCALL 	DELAY_500MSEC
 	MOV 	DPTR, #EMERGENCY_MSG
 	LCALL 	DISPCH2
-	LCALL 	DELAY_1SEC 						;this will have blinking effect
-	SJMP 	EMERGENCY 						;loop forever
+	LCALL 	DELAY_500MSEC 					;this will have blinking effect
+	SJMP 	EMERGENCY_VERIFIED				;loop forever
 	RET
 
 
@@ -912,6 +947,7 @@ SET_BELL:
 	LCALL 	INPUT_DAY  					;now accumulator will contain the day value
 	MOV 	TEMP_DAY, A
 	;Load number of bells available for that day
+
 	MOV 	DPTR, #00H
 	MOV 	R4, MODE
 	MOV 	R1, #50H
@@ -924,7 +960,6 @@ SET_BELL:
 	LCALL 	READ_DATA
 	MOV 	R1, #50H
 	MOV 	A, @R1
-	
 	MOV 	B, #00H
 	CJNE 	A, B, HAS_BELL_ENTRY		;if its non zero then that means it has entry
 	LCALL 	CLEAR
@@ -945,6 +980,7 @@ SET_BELL:
 		MOV 	R1, #50H
 		MOV 	COUNT9, #01H
 		LCALL 	READ_DATA
+		
 		MOV 	R1, #50H
 		MOV 	A, @R1
 		PUSH 	ACC
@@ -1200,6 +1236,8 @@ INPUT_DURATION:
 	MOV 	B, #30H
 	SUBB 	A, B
 	PUSH 	ACC
+	MOV 	A, #0CH
+	LCALL 	CMD
 	WAIT_FOR_ENTER_KEY:
 		LCALL 	KEYPD
 		CJNE 	A, #2AH, N16
@@ -1463,9 +1501,9 @@ WRITE_DATA:
 	LCALL 	EEPROM_START
 	MOV 	A,#0A0H          
 	LCALL 	SEND_DATA
-	MOV 	A,DPL          		;LOCATION ADDRESS
+	MOV 	A,DPH          		;LOCATION ADDRESS
 	LCALL 	SEND_DATA
-	MOV 	A,DPH         		;LOCATION ADDRESS
+	MOV 	A,DPL         		;LOCATION ADDRESS
 	LCALL 	SEND_DATA
 	MOV 	EEPROM_DATA,@R0
 	MOV 	A,EEPROM_DATA      	;DATA TO BE SEND
@@ -1476,9 +1514,9 @@ WRITE_DATA:
 	LCALL 	EEPROM_START
 	MOV 	A,#0A0H          
 	LCALL 	SEND_DATA
-	MOV 	A,DPL         		 ;LOCATION ADDRESS
+	MOV 	A,DPH         		 ;LOCATION ADDRESS
 	LCALL 	SEND_DATA
-	MOV 	A,DPH          		 ;LOCATION ADDRESS
+	MOV 	A,DPL          		 ;LOCATION ADDRESS
 	LCALL 	SEND_DATA
 	MOV 	EEPROM_DATA,@R0
 	MOV 	A,EEPROM_DATA        ;DATA TO BE SEND
@@ -1503,9 +1541,9 @@ READ_DATA:
 	CALL 	EEPROM_START
 	MOV 	A,#0A0H
 	CALL 	SEND_DATA
-	MOV 	A,DPL         		 ;LOCATION ADDRESS
-	CALL 	SEND_DATA
 	MOV 	A,DPH         		 ;LOCATION ADDRESS
+	CALL 	SEND_DATA
+	MOV 	A,DPL         		 ;LOCATION ADDRESS
 	CALL 	SEND_DATA
 	CALL 	EEPROM_START
 	MOV 	A,#0A1H
@@ -1690,7 +1728,7 @@ EEPROM_DELAY:
 ;*************************************************************************************************
 READ_PASSWORD:
 	MOV 	R1, #54H
-	MOV 	DPTR, #07001H
+	MOV 	DPTR, #01001H
 	MOV 	COUNT9, #4H
 	LCALL 	READ_DATA
 	RET
@@ -1796,12 +1834,12 @@ SET_NEW_PASSWORD:
 	LCALL 	CREATE_PASSWORD
 	LCALL 	CLEAR
 	MOV 	DPTR,#CONFIRM_MSG2
-	LCALL 	DISPCH2
+	LCALL 	DISP_MSG
 	RET
 
 CREATE_PASSWORD:
 	MOV 	COUNT9,#04H
-	MOV 	DPTR,#07001H
+	MOV 	DPTR,#01001H
 	MOV 	R0,#54H
 	LCALL 	WRITE_DATA
 	RET
@@ -1901,7 +1939,7 @@ SET_MODE:
 	LCALL 	CLEAR
 	MOV 	R0, #7DH
 	MOV 	COUNT9, #01H
-	MOV 	DPTR, #07FFFH
+	MOV 	DPTR, #01fffH
 	LCALL	WRITE_DATA
 	RET
 

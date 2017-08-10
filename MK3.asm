@@ -111,8 +111,8 @@ AUTH_MSG: 		DB '  ENTER THE PIN',0FH
 MESSAGE5: 		DB '  TIME IS SET!', 0FH
 AUTH_FAIL_MSG: 	DB ' INCORRECT  PIN', 0FH
 EMERGENCY_MSG: 	DB '   EMERGENCY', 0FH
-BELL_MESSAGE: 	DB ' SELECT OPTION',0FH
-BELL_OPTIONS: 	DB '1)NEW  2)EDIT',0FH
+BELL_MESSAGE: 	DB ' PRESS    1)NEW',0FH
+BELL_OPTIONS: 	DB '2)EDIT 3)DELETE',0FH
 BELL_NUMBER_MSG:DB 'BELL. NO.[01-',0FH
 NO_BELL: 		DB '  NO BELLS SET',0FH
 BELL_ACK_1: 	DB '  BELL IS SET!',0FH
@@ -120,10 +120,9 @@ SERIAL_NO_1: 	DB ' BELL NO. IS ', 0FH
 NEW_BELL_MSG: 	DB ' NEW BELL TIME', 0FH
 EDIT_DURATION: 	DB 'DURATION[IN SEC]', 0FH
 DURATION_MSG: 	DB '[1-9]: ', 0FH
-CONFIRM: 		DB '    CONFIRM!',0FH
 SECONDS: 		DB 'SEC', 0FH
-BOOTMSG:		DB 'PRESS 1:MODE',0FH
-BOOTMSG1: 		DB '      2:PASSWORD',0FH
+BOOTMSG:		DB ' PRESS   1)MODE',0FH
+BOOTMSG1: 		DB ' 2)PIN   3)RESET',0FH
 CONFIRM_MSG1: 	DB 'CONFIRM PASSWORD',0FH
 CONFIRM_MSG2: 	DB 'NEW PASSWORD SET',0FH
 MODE_MSG1: 		DB 'PRESS 1:MODE 1',0FH
@@ -136,6 +135,10 @@ INI_MSG: 		DB 'INITIALIZING',0FH
 MODE_SET_MSG: 	DB 'MODE IS UPDATED!', 0FH
 BELL_RINGING: 	DB 'BELL IS RINGING',0FH
 LOADING: 		DB '  LOADING BELL',0FH
+CONFIRM: 		DB '    CONFIRM!',0FH
+DELETE_MSG: 	DB '    DELETING',0FH
+CANCEL_MSG: 	DB '   CANCELLED!',0FH
+RESET_MSG: 		DB '   RESETTING!',0FH
 TEMP: 			DB 0H, 0H, 0H, 0H, 0H, 0H, 0H ;USE THIS TO RESET THE BELL SERIAL NUMBER
 ;*************************************************************************************************
 ;						    END of LOOK-UP TABLES
@@ -415,7 +418,7 @@ DISPCH2:
 ;DEPENDANCIES:DISP
 ;*************************************************************************************************
 DISP_DAY:
-	PUSH 	01H
+	;PUSH 	01H
 	MOV 	B, #3H 				;IN THE LOOK-UP TABLE NAMED 'WEEKDAY' EACH WEEKDAY LENGTH IS 3
 	MUL 	AB 					;HENCE TO GET ACTUAL OFFSET WE HAVE TO MULTIPLY BASE BY 3 AND ADD IT TO DPTR
 	UP12:
@@ -426,7 +429,7 @@ DISP_DAY:
 			MOV 	A,B 		;you might assume that why to again load to Acc. but after first iteration...
 			MOVC 	A,@A+DPTR 	;use lookup table to get ascii character
 			DJNZ 	R1,SKIP1
-			POP 	01H
+			;POP 	01H
 			RET		
 	SKIP1:	
 		INC 	DPTR
@@ -704,7 +707,7 @@ KEYPD_NO_LOOP:
 ;This module is called from the main loop. This module compares the RTC time with next bell time
 ;and if it matches calls the ring bell module and which inturn loads the next bell.
 ;Parameters: None passed explicitly. but needs the next bell timing loaded in the bell_* set of 
-;		 variables
+;		 	variables
 ;
 ; 								PLEASE AVOID MODIFYING THIS MODULE
 ;*************************************************************************************************
@@ -735,7 +738,6 @@ LOAD_NEXT_BELL:
 	MOV 	45h, MIN
 	LCALL 	LOAD_NEXT_BELL_MODULE 				;now load next bell
 	SJMP 	PROCEED_TO_CMP_TIME					;again go back to cmd_time
-	
 RING_BELL:
 	;MAKE HIGH ON SOME PIN
 	SETB 	P3.7
@@ -751,7 +753,6 @@ RING_BELL:
 	LCALL 	LOAD_NEXT_BELL_MODULE 				;load next bell
 
 	RET
-
 LOAD_NEXT_BELL_MODULE:
 	MOV 	IS_BELL_UPDATED, #00H 				;this is to know if next bell for day is available
 	MOV 	NO_BELL_FLAG, #00H
@@ -911,6 +912,8 @@ VER_PASSWORD:
 
 EMERGENCY:
 	LCALL 	VER_PASSWORD
+	MOV 	A, #0CH
+	LCALL  	CMD
 	;MAKE SOME PIN HIGH
 	SETB 	P3.7
 	EMERGENCY_VERIFIED:
@@ -922,17 +925,20 @@ EMERGENCY:
 	SJMP 	EMERGENCY_VERIFIED				;loop forever
 	RET
 
+;*************************************************************************************************
+;This module is used to set new bell and edit the existing the bell
+;*************************************************************************************************
 
 SET_BELL:
-	LCALL VER_PASSWORD
+	LCALL 	VER_PASSWORD
 	SET_BELL_VERIFIED:
 	LCALL 	CLEAR
 	MOV 	DPTR, #BELL_MESSAGE
 	LCALL 	DISPCH2
 	LCALL 	SECOND
-	MOV 	DPTR, #BELL_OPTIONS
+	MOV 	DPTR, #BELL_OPTIONS 
 	LCALL 	DISPCH2
-	MOV 	A, #0EH
+	MOV 	A, #0CH
 	LCALL 	CMD
 	LOOP8: 
 		LCALL 	KEYPD
@@ -941,135 +947,28 @@ SET_BELL:
 		JMP 	NEW_BELL
 		N14:
 		MOV 	B, #32H
+	CJNE 	A, B, N25
+		JMP EDIT_BELL
+	N25:
+	MOV 	B, #33H
 	CJNE 	A, B, LOOP8
+	JMP 	DELETE_BELL
 
-	EDIT_BELL:
-	LCALL 	INPUT_DAY  					;now accumulator will contain the day value
-	MOV 	TEMP_DAY, A
-	;Load number of bells available for that day
-
-	MOV 	DPTR, #00H
-	MOV 	R4, MODE
-	MOV 	R1, #50H
-	MOV 	COUNT9, #01H
-	MOV 	A, TEMP_DAY
-	CJNE 	R4, #02H, ITS_MODE_1
-	ADD 	A, #07H
-	ITS_MODE_1:
-	MOV 	DPL, A
-	LCALL 	READ_DATA
-	MOV 	R1, #50H
-	MOV 	A, @R1
-	MOV 	B, #00H
-	CJNE 	A, B, HAS_BELL_ENTRY		;if its non zero then that means it has entry
+EDIT_BELL:
+	LCALL 	INPUT_DAY  						;now accumulator will contain the day value
+	MOV 	TEMP_DAY, A 	
+	LCALL 	GET_MAX_SERIAL 					;now 50h contains the Serial number
+	MOV 	A, 50H
+	CJNE 	A, #00H, HAS_BELL_ENTRY			;if its non zero then that means it has entry
 	LCALL 	CLEAR
 	MOV 	DPTR, #NO_BELL
 	LCALL 	DISPCH2
 	LCALL 	DELAY_1SEC
-	SJMP 	SET_BELL_VERIFIED  			;if its zero then give user chance to make an entry
+	SJMP 	SET_BELL_VERIFIED  				;if its zero then give user chance to make an entry
 
 	HAS_BELL_ENTRY:
-		MOV 	A, TEMP_DAY
-		MOV 	DPTR, #00H
-		MOV 	R4, MODE
-		CJNE 	R4, #02H, IT_IS_MODE_1
-		CLR 	C
-		ADD 	A, #07H
-		IT_IS_MODE_1:
-		MOV 	DPL, A
-		MOV 	R1, #50H
-		MOV 	COUNT9, #01H
-		LCALL 	READ_DATA
-		
-		MOV 	R1, #50H
-		MOV 	A, @R1
-		PUSH 	ACC
-		LCALL 	CLEAR
-		MOV 	DPTR, #BELL_NUMBER_MSG 	;display number of bells i.e., max count
-		LCALL 	DISPCH2
-		POP 	ACC 					;will contain max serial number
-		LCALL 	HEX_BCD 				;converts to bcd and output will be in acc[lower two dig] and r2[only for 3 dig BCD]
-		PUSH 	ACC 					;saving the bcd converted value	
-		LCALL 	DISP_2DIG_NO 			;display the serial number
-		MOV 	A, #']'
-		LCALL 	DISP 					
-		LCALL 	SECOND
-		MOV 	A, #0FH
-		LCALL 	CMD
-		LCALL 	KEYPD
-		LCALL 	DISP 					;read and display the entered number
-		CJNE 	A, #'*', CONTINUE_1 	
-		POP 	ACC
-		SJMP 	HAS_BELL_ENTRY
-		CONTINUE_1:
-		CJNE 	A, #'#', CONTINUE_2
-		LCALL 	UNIVERSAL_ERROR_MODULE
-		POP 	ACC
-		SJMP 	HAS_BELL_ENTRY
-		CONTINUE_2:
-		CLR 	C
-		SUBB 	A, #30H
-		SWAP 	A 						;move the entered number to 10's place
-		MOV 	B, A 					;and save it in B
-		LCALL 	KEYPD
-		LCALL 	DISP
-		CJNE 	A, #'*', CONTINUE_3
-		POP 	ACC
-		SJMP 	HAS_BELL_ENTRY
-		CONTINUE_3:
-		CJNE 	A, #'#', CONTINUE_4
-		LCALL 	UNIVERSAL_ERROR_MODULE
-		POP 	ACC
-		SJMP 	HAS_BELL_ENTRY
-		CONTINUE_4:
-		CLR 	C
-		SUBB 	A, #30H
-		ADD 	A, B 						;now acc. contains the actual entered serial in packed BCD
-		MOV 	B,A 						;save this value
-		POP 	ACC 						;restore max. bells available
-		CLR 	C
-		SUBB 	A, B 						
-		JNC 	OKAY
-		LCALL 	UNIVERSAL_ERROR_MODULE
-		LJMP 	HAS_BELL_ENTRY
-		OKAY:
-		MOV 	A, B
-		CJNE 	A, #00H, OKAY_1 			;checking if entered number is 0
-		LCALL 	UNIVERSAL_ERROR_MODULE
-		LJMP 	HAS_BELL_ENTRY
-		OKAY_1:
-		MOV 	A, B
-		LCALL 	BCD_HEX 					;converted value will be in acc
-		MOV 	SERIAL, A 					;saving the value of serial safely in the RAM
-		MOV 	DPH, TEMP_DAY 				;location of the bells start from 0*03
-		MOV 	R4, MODE
-		MOV 	A, DPH
-		CJNE 	R4, #02H, IT_IS_MODE_1_
-		CLR 	C
-		ADD 	A, #07H 					;location of bells for mode 2 is 0700+0*03
-		IT_IS_MODE_1_:
-		MOV 	DPH, A
-		MOV 	B, #03H
-		MOV 	A, SERIAL
-		MUL 	AB
-		MOV 	DPL,A
-		MOV 	R1, #54H
-		MOV 	COUNT9, #03H
-		LCALL 	READ_DATA
-		MOV 	HOURS, 54H
-		MOV 	MIN, 55H
-		MOV 	A, #' '
-		LCALL 	DISP
-		LCALL 	DISP_TIME
-		WAIT_FOR_ENTER: 					;WAITING FOR USER TO CONFIRM THAT HE/SHE WANTS THIS BELL ITSELF
-		MOV 	A, #0CH 						;turn off cursor
-		LCALL 	CMD
-		LCALL 	KEYPD
-		CJNE 	A, #2AH, N15
-		LJMP 	HAS_BELL_ENTRY 
-		N15:
-		CJNE 	A, #23H, WAIT_FOR_ENTER
-		MOV 	B, #01H
+		LCALL 	INPUT_SERIAL 				;now SERIAL will have the serial number of bell to be modified
+		MOV 	B, #01H 					;this tells that the module through which called is not set time but belongs to bell cat.
 		LCALL 	INPUT_HOUR_MINUTE			;READ THE TIME
 		LCALL 	INPUT_DURATION
 		LCALL 	CONFIRM_BELL 				;displays confirmation message along with info.
@@ -1082,16 +981,7 @@ SET_BELL:
 		LCALL 	CLEAR
 		MOV 	DPTR, #BELL_ACK_1
 		LCALL 	DISPCH2
-		MOV 	A, TEMP_DAY 				;start to save the bell.
-		MOV 	R4, MODE
-		CJNE 	R4, #02H, ITS_MODE_1__
-		ADD 	A, #07H 					;to understand the logic see the memory allocation at the beginnig the code
-		ITS_MODE_1__:
-		MOV 	DPH, A
-		MOV 	A, SERIAL
-		MOV		B, #03H
-		MUL 	AB
-		MOV 	DPL, A 						;after this ins. the DPTR will contain the address to which the bell has to be saved
+		LCALL 	LOCATE_THE_BELLS 			;this module will load the DPTR with bell address
 		LCALL 	SAVE_BELL
 		RET
 
@@ -1101,16 +991,9 @@ SET_BELL:
 		MOV 	B, #01H
 		LCALL 	INPUT_HOUR_MINUTE
 		LCALL 	INPUT_DURATION 				;returned in DURATION variable
-		MOV 	DPH, #00H
-		MOV 	R4, MODE
-		MOV 	A, TEMP_DAY
-		CJNE 	R4, #02H, ADD_NOTHING 		;THIS MEANS MODE 1
-		CLR  	C
-		ADD 	A, #07H
-		ADD_NOTHING:
+		MOV  	R1, #54H
+		LCALL 	LOCATE_THE_SERIAL
 		MOV 	COUNT9, #01H
-		MOV 	R1, #54H
-		MOV 	DPL, A
 		LCALL 	READ_DATA
 		MOV 	SERIAL, 54H 				;if needed, add a comp. instruction to limit max count
 		LCALL 	CONFIRM_BELL
@@ -1120,19 +1003,10 @@ SET_BELL:
 		SJMP 	NEW_BELL
 		N18:
 		CJNE 	A, #'#', WAIT_FOR_ENTER_KEY_2
-		MOV 	R4, MODE
-		MOV 	A, TEMP_DAY
-		CJNE 	R4, #01H, ITS_MODE_2
-		SJMP 	NOTHING_TO_ADD
-		ITS_MODE_2:
-		ADD 	A, #07H
-		NOTHING_TO_ADD:
-		MOV 	DPH, A
 		MOV 	A, SERIAL
-		INC 	A  							;this is because we start serial from 1 and not 0
-		MOV 	B, #03H
-		MUL 	AB
-		MOV 	DPL, A
+		INC  	A
+		MOV 	SERIAL, A
+		LCALL 	LOCATE_THE_BELLS
 		LCALL 	SAVE_BELL 					;after execution of this ins. the bell will be saved
 		LCALL 	CLEAR
 		LCALL 	FIRST
@@ -1142,25 +1016,12 @@ SET_BELL:
 		MOV 	DPTR, #SERIAL_NO_1			;we have to display the serial number for users ref.
 		LCALL 	DISPCH2
 		MOV 	A, SERIAL
-		INC 	A
+		;INC 	A
 		LCALL 	HEX_BCD
 		LCALL 	DISP_2DIG_NO 
 		MOV 	A, SERIAL
-		INC 	A
-		MOV 	54H, A
-		MOV 	R0, #54H
-		MOV 	COUNT9, #01H
-		MOV 	DPH, #00H
-		MOV 	R4, MODE
-		MOV 	A, TEMP_DAY
-		CJNE 	R4, #01H, ADD_SOMETHING
-		SJMP 	ADD_NOTHING_1
-		ADD_SOMETHING:
-		CLR 	C
-		ADD 	A, #07H
-		ADD_NOTHING_1:
-		MOV 	DPL, A
-		LCALL 	WRITE_DATA
+		;INC 	A
+		LCALL 	WRITE_SERIAL
 		LCALL 	DELAY_1SEC
 		LCALL 	DELAY_1SEC
 		RET
@@ -1202,6 +1063,232 @@ CONFIRM_BELL:
 	MOV 	DPTR, #SECONDS
 	LCALL 	DISPCH2
 	RET
+
+DELETE_BELL:
+	LCALL 	INPUT_DAY
+	MOV 	TEMP_DAY, A
+	LCALL 	GET_MAX_SERIAL 			;value of max serial in 50H
+	MOV 	A, 50H
+	CJNE 	A, #00H, PROCEED_TO_READ_SERIAL 
+	LCALL 	CLEAR
+	MOV 	DPTR, #NO_BELL
+	LCALL 	DISPCH2
+	LCALL 	DELAY_1SEC
+	LJMP 	SET_BELL_VERIFIED
+	PROCEED_TO_READ_SERIAL:
+	LCALL 	INPUT_SERIAL 			;value of serial will be in SERIAL
+	LCALL 	CLEAR
+	MOV 	DPTR, #CONFIRM
+	LCALL 	DISPCH2
+	LOOP_AGAIN:
+	LCALL 	KEYPD
+	MOV 	B, #'*'
+	CJNE 	A, B, N26
+	JMP 	DELETE_BELL
+	N26:
+		MOV 	B, #'#'
+		CJNE 	A, B, LOOP_AGAIN
+		MOV 	A, 50H
+		CLR 	C
+		DEC 	A
+		LCALL	WRITE_SERIAL
+	MOV 	A, 50H
+	CJNE 	A, #01H, PROCEED_TO_SHIFT
+	RET
+	PROCEED_TO_SHIFT:
+		INC 	A
+		MOV 	50H, A  			;just trace the following loop, u will get to know why inc is needed
+		LCALL 	CLEAR
+		MOV 	DPTR, #DELETE_MSG
+		LCALL 	DISPCH2
+		LOOP_SHIFT:
+		MOV 	A, SERIAL
+		CJNE 	A, 50H, CONTINUE_TO_SHIFT
+		RET
+		CONTINUE_TO_SHIFT:
+		INC  	A
+		MOV 	SERIAL, A
+		LCALL 	LOCATE_THE_BELLS
+		MOV 	COUNT9, #03H
+		MOV 	R1, #54H
+		LCALL 	READ_DATA
+		MOV 	A, SERIAL
+		DEC 	A
+		MOV 	SERIAL, A
+		LCALL 	LOCATE_THE_BELLS
+		MOV 	R0, #54H
+		MOV 	COUNT9, #03H
+		LCALL 	WRITE_DATA
+		MOV 	A, SERIAL
+		INC 	A
+		MOV 	SERIAL, A
+		SJMP LOOP_SHIFT
+	RET 							;this ret is not for DELETE_MODULE but for SET_BELL
+
+
+;*************************************************************************************************
+;This module reads the Serial number and displays the bell time accordingly
+;Parameter: TEMP_DAY must contain the day
+;Return: SERIAL
+;*************************************************************************************************
+
+
+INPUT_SERIAL:
+	MOV 	A, 	TEMP_DAY 			;These statements are necessary though it migt seem redundant
+	LCALL	GET_MAX_SERIAL 			
+	MOV 	A, 50h
+	PUSH 	ACC
+	LCALL 	CLEAR
+	MOV 	DPTR, #BELL_NUMBER_MSG 	;display number of bells i.e., max count
+	LCALL 	DISPCH2
+	POP 	ACC 					;will contain max serial number
+	LCALL 	HEX_BCD 				;converts to bcd and output will be in acc[lower two dig] and r2[only for 3 dig BCD]
+	PUSH 	ACC 					;saving the bcd converted value	
+	LCALL 	DISP_2DIG_NO 			;display the serial number
+	MOV 	A, #']'
+	LCALL 	DISP 					
+	LCALL 	SECOND
+	MOV 	A, #0FH
+	LCALL 	CMD
+	LCALL 	KEYPD
+	LCALL 	DISP 					;read and display the entered number
+	CJNE 	A, #'*', CONTINUE_1 	
+	POP 	ACC 					;this pop is to ensure that due to continuos wrong entry the stack overflow wont happen
+	SJMP 	INPUT_SERIAL
+	CONTINUE_1:
+	CJNE 	A, #'#', CONTINUE_2
+	LCALL 	UNIVERSAL_ERROR_MODULE
+	POP 	ACC
+	SJMP 	INPUT_SERIAL
+	CONTINUE_2:
+	CLR 	C
+	SUBB 	A, #30H
+	SWAP 	A 						;move the entered number to 10's place
+	MOV 	B, A 					;and save it in B
+	LCALL 	KEYPD
+	LCALL 	DISP
+	CJNE 	A, #'*', CONTINUE_3
+	POP 	ACC
+	SJMP 	INPUT_SERIAL
+	CONTINUE_3:
+	CJNE 	A, #'#', CONTINUE_4
+	LCALL 	UNIVERSAL_ERROR_MODULE
+	POP 	ACC
+	SJMP 	INPUT_SERIAL
+	CONTINUE_4:
+	CLR 	C
+	SUBB 	A, #30H
+	ADD 	A, B 						;now acc. contains the actual entered serial in packed BCD
+	MOV 	B,A 						;save this value
+	POP 	ACC 						;restore max. bells available
+	CLR 	C
+	SUBB 	A, B 						
+	JNC 	OKAY
+	LCALL 	UNIVERSAL_ERROR_MODULE
+	LJMP 	INPUT_SERIAL
+	OKAY:
+	MOV 	A, B
+	CJNE 	A, #00H, OKAY_1 			;checking if entered number is 0
+	LCALL 	UNIVERSAL_ERROR_MODULE
+	LJMP 	INPUT_SERIAL
+	OKAY_1:
+	MOV 	A, B
+	LCALL 	BCD_HEX 					;converted value will be in acc
+	MOV 	SERIAL, A 					;saving the value of serial safely in the RAM
+	LCALL 	LOCATE_THE_BELLS
+	MOV 	R1, #54H
+	MOV 	COUNT9, #03H
+	LCALL 	READ_DATA
+	MOV 	HOURS, 54H
+	MOV 	MIN, 55H
+	MOV 	A, #' '
+	LCALL 	DISP
+	LCALL 	DISP_TIME
+	WAIT_FOR_ENTER: 					;WAITING FOR USER TO CONFIRM THAT HE/SHE WANTS THIS BELL ITSELF
+	MOV 	A, #0CH 					;turn off cursor
+	LCALL 	CMD
+	LCALL 	KEYPD
+	CJNE 	A, #2AH, N15
+	LJMP 	INPUT_SERIAL 
+	N15:
+	CJNE 	A, #23H, WAIT_FOR_ENTER
+	RET
+
+
+;*************************************************************************************************
+;This module is used to delete the existing bell. After deleion the serial number will be altered
+;Parameters: Max Serial number , day, mode and serial number to be deleted
+;Return:None
+;DEPENDANCIES:
+;*************************************************************************************************
+
+
+;**************************************************************************************************
+;This module is used to make DPTR point the memory address pointed by SERIAL and TEMP_DAY
+;Return: DPTR points the appropriate memory address 
+; 								DPTR POINTS TO THE BELLS
+; 				 					DPTR= DPH+DPL
+;							  DPH=TEMP_DAY+7(IF MODE IS 2)
+;									DPL=SERIAL*03
+;**************************************************************************************************
+
+LOCATE_THE_BELLS:
+	MOV 	DPH, TEMP_DAY 				;location of the bells start from 0*03
+	MOV 	R4, MODE
+	MOV 	A, DPH
+	CJNE 	R4, #02H, IT_IS_MODE_1_
+	CLR 	C
+	ADD 	A, #07H 					;location of bells for mode 2 is 0700+0*03, where * can be any value
+	IT_IS_MODE_1_:
+	MOV 	DPH, A
+	MOV 	B, #03H
+	MOV 	A, SERIAL
+	MUL 	AB
+	MOV 	DPL,A
+	RET
+
+;*************************************************************************************************
+;This module points the DPTR to the count of the bells for particular day and mode
+;Parameters:MODE and TEMP_DAY
+;Return: DPTR
+; 								DPTR POINTS TO THE SERIAL
+;*************************************************************************************************
+LOCATE_THE_SERIAL:
+	MOV 	DPTR, #00H
+	MOV 	R4, MODE
+	MOV 	R0, #50H
+	MOV 	COUNT9, #01H
+	MOV 	A, TEMP_DAY
+	CJNE 	R4, #02H, ITS_MODE_1
+	CLR 	C
+	ADD 	A, #07H
+	ITS_MODE_1:
+	MOV 	DPL, A
+	RET
+
+;*************************************************************************************************
+;This module returns the max serial count for the given day
+;Parameters:Day in Acc
+;Return: Data in 50H
+;DEPENDANCIES:INPUT_DAY, READ_DATA
+;*************************************************************************************************
+GET_MAX_SERIAL:
+	MOV 	R1, #50H
+	LCALL 	LOCATE_THE_SERIAL
+	LCALL 	READ_DATA
+	RET
+
+;*************************************************************************************************
+;This module will write one byte of data to location pointed by the TEMP_DAY and mode 
+;Serial number should be placed in Acc and TEMP_DAY must have the value of the Day
+;Return: value of serial is written to the EEPROM
+;*************************************************************************************************
+WRITE_SERIAL:
+	MOV 	50H, A	
+	MOV 	R0, #50H			
+	LCALL 	LOCATE_THE_SERIAL
+	LCALL  	WRITE_DATA
+	RET	
 
 ;*************************************************************************************************
 ;This module is used to enter the duration Option
@@ -1328,15 +1415,15 @@ INPUT_DAY:
 	CJNE 	A, #30H, N12				;COMPARING THE VALUE OF KEY WITH 0 AS VALID CHARACTERS ARE ONLY 1-7
 	SJMP 	ERROR_DAY
 	N12:
-	MOV 	R1,A 						;SAVING THE VALUE OF A
-	PUSH 	01H							;THE DISP_DAY FUNCTION WIHICH WE WILL USE LATER WILL USE R1 AS ONE OF ITS VARIABLES
+	MOV 	R3,A 						;SAVING THE VALUE OF A
+	;PUSH 	01H							;THE DISP_DAY FUNCTION WIHICH WE WILL USE LATER WILL USE R1 AS ONE OF ITS VARIABLES
 	CLR 	C  							;... SO WE HAVE TO USE PUSH TO SAVE R1
 	SUBB 	A, #38H 					;ERROR CHECKING BY CHECKING IF THE ANSWER COMES OUT NEGATIVE
 	JNC 	ERROR_DAY 					;EX: INPUT IS 37H(VALID) SO 37H-38H=-1H HENCE C=1. HENCE VALID
 	CLR 	C 							;EX: IF INPUT IS 39H(INVALID) SO ASNWER IS 1H AND C=0. HENCE INVALID
 	MOV 	A, #14H						;SHIFTING RIGHT CURSOR TO GIVE SPACE
 	LCALL 	CMD 
-	MOV 	A,R1 						;RESTORING THE VALUE OF A
+	MOV 	A,R3 						;RESTORING THE VALUE OF A
 	SUBB 	A, #30H 					;GETTING ACTUAL VALUE FROM ASCII VALUE
 	LCALL 	DISP_DAY					;DISPLAYING THE DAY AS SOON AS WE PRESS THE KEY
 	MOV 	A, #0CH
@@ -1347,8 +1434,8 @@ INPUT_DAY:
 	JMP 	INPUT_DAY
 	N13:
 	CJNE 	A, #23H, LOOP3 				;IF USER ENTERS # IT IS CONSIDERED AS 'ENTER KEY'
-	POP 	01H 						;01H STANDS FOR R1
-	MOV 	A, R1
+	;POP 	01H 						;01H STANDS FOR R1
+	MOV 	A, R3
 	CLR 	C 
 	SUBB 	A, #30H 					;USE THIS VALUE OF DAY
 	RET
@@ -1736,7 +1823,15 @@ READ_PASSWORD:
 ;*************************************************************************************************
 ;*************************************************************************************************
 
-
+;*************************************************************************************************
+; These are needed because JNC is jump ins. and not call ins.
+;*************************************************************************************************
+ERROR_HANDLER_BOOT_MENU:
+	LCALL 	UNIVERSAL_ERROR_MODULE
+	LJMP 	BOOT_MENU
+ERROR_HANDLER_MODE_MSG:
+	LCALL 	UNIVERSAL_ERROR_MODULE
+	LJMP 	MODE_MSG
 
 ;*************************************************************************************************
 ;This module is used to create new password. This module is called when button 9 is pressed during
@@ -1750,6 +1845,8 @@ BOOT_MENU:
 	LCALL	SECOND
 	MOV 	DPTR,#BOOTMSG1
 	LCALL 	DISPCH2
+	MOV  	A, #0CH
+	LCALL 	CMD
 	LCALL 	KEYPD 				;read the option(wait for option and read)
 	;LCALL DISP
 	CJNE 	A, #'#', N19
@@ -1765,12 +1862,12 @@ BOOT_MENU:
 	N21:
 	MOV 	R1, A
 	CLR 	C
-	SUBB 	A, #33H 			;start validating the input (valid are 0 and 1)
+	SUBB 	A, #34H 			;start validating the input (valid are 0 and 1)
 	JNC 	ERROR_HANDLER_BOOT_MENU
 	MOV 	A, R1 
 	CLR 	C
 	SUBB 	A, #30H
-	CJNE 	A, #01H, CHK_2 		;if not 1 then it must be 2(change password)
+	CJNE 	A, #01H, CHK_2 		;if not 1 then it must be 2
 	MODE_MSG:
 		LCALL 	CLEAR  
 		MOV 	DPTR,#MODE_MSG1
@@ -1805,18 +1902,30 @@ BOOT_MENU:
 		LCALL 	CLEAR
 		RET
 	CHK_2:
+		CJNE A, #02H, CHK_3
 		LCALL 	CHANGE_PASSWORD
 		RET
+	CHK_3:
+		LCALL 	CLEAR
+		MOV 	DPTR, #CONFIRM
+		LCALL 	DISPCH2
+		LOOP_UNTIL_ENTER:
+		LCALL 	KEYPD
+		CJNE 	A, #'*', CHECK_FOR_ENTER
+		LCALL 	CLEAR
+		MOV 	DPTR, #CANCEL_MSG
+		LCALL 	DISP_MSG
+		RET
+		CHECK_FOR_ENTER:
+			CJNE 	A, #'#', LOOP_UNTIL_ENTER
+			LCALL 	CLEAR
+			MOV 	DPTR, #RESET_MSG
+			LCALL 	DISP_MSG
+			LCALL 	FACTORY_RESET
+			LCALL 	CLEAR
+		RET
 
-;*************************************************************************************************
-; These are needed because JNC is jump ins. and not call ins.
-;*************************************************************************************************
-ERROR_HANDLER_BOOT_MENU:
-	LCALL 	UNIVERSAL_ERROR_MODULE
-	LJMP 	BOOT_MENU
-ERROR_HANDLER_MODE_MSG:
-	LCALL 	UNIVERSAL_ERROR_MODULE
-	LJMP 	MODE_MSG
+
 
 
 CHANGE_PASSWORD:
@@ -2103,10 +2212,10 @@ I2C_Stop:
 
 
 ;**************************************************************************************************
-;This module is used while debugging to write some data to EEPROM
+;NAME SAYS ALL
 ;**************************************************************************************************
 
-CREATE_DATA:
+FACTORY_RESET:
 	MOV 	COUNT9, #07H
 	MOV 	DPTR,#TEMP
 	MOV 	R0,#54H
@@ -2126,7 +2235,6 @@ CREATE_DATA:
 	MOV 	COUNT9, #07H
 	LCALL 	WRITE_DATA
 	RET
-
 
 END
 
